@@ -29,18 +29,79 @@ export default function WeatherApp() {
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
-  // เมื่อเปลี่ยนจังหวัด รีเซ็ตอำเภอ และสั่งแผนที่ย้ายตำแหน่งและซูมด้วย flyTo
+  // 1. ซูมตำแหน่งเริ่มต้นตอนเปิดแอป
   useEffect(() => {
-    const firstDistrict = provinces[province.value][0];
-    setDistrict({ label: firstDistrict, value: firstDistrict });
+  let coord = null;
+  const districtKey = `${province.value}_${district.value}`;
 
-    const coord = provinceCoordinates[province.value];
-    if (coord && mapRef.current) {
-      // เคลื่อนกล้องไปยังตำแหน่งหมุด พร้อมซูมระดับ 9 ใช้ duration 2 วิ
-      mapRef.current.flyTo(coord, 9, { animate: true, duration: 2 });
+  if (provinceCoordinates[districtKey]) {
+    coord = provinceCoordinates[districtKey];
+  } else if (provinceCoordinates[province.value]) {
+    coord = provinceCoordinates[province.value];
+  }
+
+  if (coord && mapRef.current) {
+    console.log("Initial Zooming to:", coord); // ✅ ตรวจสอบตอนเริ่มต้น
+    mapRef.current.flyTo(coord, 12, { animate: true, duration: 2 });
+  }
+}, []);
+
+
+  // 2. รีเซ็ตอำเภอเมื่อเปลี่ยนจังหวัด
+  useEffect(() => {
+    const firstDistrict = provinces[province.value]?.[0];
+    if (firstDistrict) {
+      setDistrict({ label: firstDistrict, value: firstDistrict });
     }
   }, [province]);
 
+  // 3. ซูมไปยังจังหวัดใหม่ทันทีหลังเลือก
+useEffect(() => {
+  if (!province.value || !district.value || !mapRef.current) return;
+
+  const districtKey = `${province.value}_${district.value}`;
+  const districtCoord = provinceCoordinates[districtKey];
+  const provinceCoord = provinceCoordinates[province.value];
+
+  const coord = districtCoord || provinceCoord;
+
+  if (coord) {
+    mapRef.current.flyTo(coord, districtCoord ? 12 : 9, {
+      animate: true,
+      duration: 1.5,
+    });
+  } else {
+    console.warn("ไม่พบพิกัดสำหรับ:", districtKey, "หรือ", province.value);
+  }
+}, [province, district]);
+
+
+  // 4. ซูมไปที่อำเภอ เมื่อเลือกเสร็จ
+  useEffect(() => {
+  if (!province.value || !district.value || !mapRef.current) return;
+
+  const districtKey = `${province.value}_${district.value}`;
+  const districtCoord = provinceCoordinates[districtKey];
+  const provinceCoord = provinceCoordinates[province.value];
+
+  const coord = districtCoord || provinceCoord;
+
+  if (coord) {
+    console.log("Zooming to:", coord); // ✅ แสดงค่าพิกัดจริงใน console
+
+    mapRef.current.flyTo(coord, districtCoord ? 12 : 9, {
+      animate: true,
+      duration: 1.5,
+    });
+  } else {
+    console.warn("ไม่พบพิกัดสำหรับ:", districtKey, "หรือ", province.value);
+  }
+}, [province, district]);
+
+
+  // 5. โหลดข้อมูลพยากรณ์อากาศเมื่อ province หรือ district เปลี่ยน
+  // 5. โหลดข้อมูลพยากรณ์อากาศเมื่อ province หรือ district เปลี่ยน
+useEffect(() => {
   const fetchWeather = async () => {
     if (!district || !province) return;
     setLoading(true);
@@ -52,10 +113,14 @@ export default function WeatherApp() {
       const startDate = formatDate(today);
       const endDate = formatDate(new Date(today.setDate(today.getDate() + 7)));
 
-      const location = `${district.value},${province.value},TH`;
-      const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
-        location
-      )}/${startDate}/${endDate}?unitGroup=metric&include=days&key=${API_KEY}&contentType=json`;
+      const location = `${province.value},TH`; // ✅ ใช้เฉพาะจังหวัด (ปลอดภัยกว่า)
+      const encodedLocation = encodeURIComponent(location); // ✅ encode แค่ 1 ครั้ง
+
+      const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodedLocation}/${startDate}/${endDate}?unitGroup=metric&include=days&key=${API_KEY}&contentType=json`;
+
+      // ✅ Debug
+      console.log("Requesting weather for:", location);
+      console.log("Full URL:", url);
 
       const response = await fetch(url);
       if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
@@ -68,10 +133,9 @@ export default function WeatherApp() {
     }
   };
 
-  useEffect(() => {
-    fetchWeather();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  fetchWeather();
+}, [province, district]);
+
 
   const provinceOptions = Object.keys(provinces).map((prov) => ({ label: prov, value: prov }));
   const districtOptions = provinces[province.value]?.map((dist) => ({ label: dist, value: dist })) || [];
@@ -80,14 +144,15 @@ export default function WeatherApp() {
     <div style={{ maxWidth: 500, margin: "auto" }}>
       <h2>พยากรณ์อากาศ</h2>
 
-      <MapContainer
-        center={[13.736717, 100.523186]} // ตำแหน่งเริ่มต้นกรุงเทพฯ
-        zoom={6} // zoom เริ่มต้นกว้างๆ
-        style={{ height: 300, width: "100%", marginBottom: 20 }}
-        whenCreated={(mapInstance) => {
-          mapRef.current = mapInstance;
-        }}
-      >
+    <MapContainer
+      center={[13.736717, 100.523186]}
+      zoom={6}
+      style={{ height: 300, width: "100%", marginBottom: 20 }}
+      whenCreated={(mapInstance) => {
+        mapRef.current = mapInstance;
+     }}
+>
+
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -129,7 +194,7 @@ export default function WeatherApp() {
         styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
       />
 
-      <button onClick={fetchWeather} style={{ padding: 8, width: "100%" }}>
+      <button onClick={() => {}} style={{ padding: 8, width: "100%" }} disabled>
         ดูสภาพอากาศ ({district.label}, {province.label})
       </button>
 
