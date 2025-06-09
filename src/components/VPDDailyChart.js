@@ -9,12 +9,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-export default function VPDDailyChart({ weather, selectedDay }) {
+const VPDDailyChart = React.memo(function VPDDailyChart({ weather, selectedDay }) {
   const hourlyVPDData = useMemo(() => {
     if (!weather?.days || !selectedDay) return [];
 
     const dayData = weather.days.find((d) => d.datetime === selectedDay);
-    if (!dayData || !dayData.hours) return [];
+    if (!dayData?.hours) return [];
 
     return dayData.hours.map((hour) => {
       const t = hour.temp;
@@ -33,7 +33,7 @@ export default function VPDDailyChart({ weather, selectedDay }) {
         }),
         vpd,
       };
-    }).filter(Boolean); // กรองค่า null ออก
+    }).filter(Boolean); // remove null
   }, [weather, selectedDay]);
 
   return (
@@ -63,4 +63,6 @@ export default function VPDDailyChart({ weather, selectedDay }) {
       )}
     </div>
   );
-}
+});
+
+export default VPDDailyChart;

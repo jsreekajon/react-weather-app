@@ -95,6 +95,8 @@ export default function WeatherApp() {
         setT(dayData.temp);
         setH(dayData.humidity);
         setL(dayData.uvindex);
+
+        console.log("จังหวัด:", province.label, "อำเภอ:", district.label, "วันที่:", dayData.datetime, "อุณหภูมิเฉลี่ย (°C):", dayData.temp, "ความชื้นสัมพัทธ์เฉลี่ย (%):", dayData.humidity, "UV Index เฉลี่ย:", dayData.uvindex);
       }
     }
   }, [weather, selectedDay]);
@@ -153,16 +155,34 @@ export default function WeatherApp() {
         )}
       </MapContainer>
 
-      <label>จังหวัด:</label>
-      <Select options={provinceOptions} value={province} onChange={setProvince} isSearchable styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
+      <label htmlFor="province-select">จังหวัด:</label>
+      <Select 
+      inputId="province-select"
+      options={provinceOptions} 
+      value={province} 
+      onChange={setProvince} 
+      isSearchable 
+      styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
 
-      <label>อำเภอ:</label>
-      <Select options={districtOptions} value={district} onChange={setDistrict} isSearchable styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
+      <label htmlFor="district-select">อำเภอ:</label>
+      <Select 
+      inputId="district-select"
+      options={districtOptions} 
+      value={district} 
+      onChange={setDistrict} 
+      isSearchable 
+      styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
 
       {weather && (
         <>
-          <label>เลือกวันที่:</label>
-          <Select options={dayOptions} value={dayOptions.find((opt) => opt.value === selectedDay)} onChange={(option) => setSelectedDay(option.value)} isSearchable={false} styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
+          <label htmlFor="day-select">เลือกวันที่:</label>
+          <Select 
+          inputId="day-select"
+          options={dayOptions} 
+          value={dayOptions.find((opt) => opt.value === selectedDay)} 
+          onChange={(option) => setSelectedDay(option.value)} 
+          isSearchable={false} 
+          styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
         </>
       )}
 
