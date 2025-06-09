@@ -1,0 +1,66 @@
+import React, { useMemo } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+export default function VPDDailyChart({ weather, selectedDay }) {
+  const hourlyVPDData = useMemo(() => {
+    if (!weather?.days || !selectedDay) return [];
+
+    const dayData = weather.days.find((d) => d.datetime === selectedDay);
+    if (!dayData || !dayData.hours) return [];
+
+    return dayData.hours.map((hour) => {
+      const t = hour.temp;
+      const h = hour.humidity;
+
+      if (t == null || h == null) return null;
+
+      const svp = 0.6108 * Math.exp((17.27 * t) / (t + 237.3));
+      const avp = (h / 100) * svp;
+      const vpd = parseFloat((svp - avp).toFixed(3));
+
+      return {
+        time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        vpd,
+      };
+    }).filter(Boolean); // กรองค่า null ออก
+  }, [weather, selectedDay]);
+
+  return (
+    <div style={{ marginTop: 40 }}>
+      <h4>กราฟ VPD (รายชั่วโมงในวันที่ {selectedDay})</h4>
+      {hourlyVPDData.length === 0 ? (
+        <p>ไม่มีข้อมูล VPD</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart
+            data={hourlyVPDData}
+            margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="time" />
+            <YAxis label={{ value: "kPa", angle: -90, position: "insideLeft" }} />
+            <Tooltip />
+            <Line
+              type="monotone"
+              dataKey="vpd"
+              stroke="#ff7300"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}

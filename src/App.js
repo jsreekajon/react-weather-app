@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import provinces from "./provinces";
 import provinceCoordinates from "./provinceCoordinates";
+import VPDDailyChart from "./VPDDailyChart";
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -219,6 +220,9 @@ export default function WeatherApp() {
               </tbody>
             </table>
           )}
+
+          <VPDDailyChart weather={weather} selectedDay={selectedDay} />
+
         </div>
       )}
     </div>
