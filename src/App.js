@@ -110,6 +110,8 @@ export default function WeatherApp() {
         setT(dayData.temp);
         setH(dayData.humidity);
         setL(dayData.uvindex);
+        console.log("จังหวัด", province.label,"อำเภอ", district.label, "วันที่:", selectedDay, "อุณหภูมิเฉลี่ย:", dayData.temp, "°C", "ความชื้นสัมพัทธ์เฉลี่ย:",
+          dayData.humidity, "%", "UV Index เฉลี่ย:", dayData.uvindex !== undefined ? dayData.uvindex : "ไม่ระบุ");
       }
     }
   }, [weather, selectedDay]);
