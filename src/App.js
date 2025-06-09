@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Select from "react-select";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -24,30 +24,29 @@ export default function WeatherApp() {
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
+  const [selectedDay, setSelectedDay] = useState(null);
   const mapRef = useRef(null);
+
+  // ตัวแปรสภาพอากาศรายวัน
+  const [t, setT] = useState(null); // อุณหภูมิเฉลี่ยรายวัน
+  const [h, setH] = useState(null); // ความชื้นสัมพัทธ์เฉลี่ยรายวัน
+  const [l, setL] = useState(null); // UV index เฉลี่ยรายวัน
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
-  // 1. ซูมตำแหน่งเริ่มต้นตอนเปิดแอป
   useEffect(() => {
-  let coord = null;
-  const districtKey = `${province.value}_${district.value}`;
+    let coord = null;
+    const districtKey = `${province.value}_${district.value}`;
+    if (provinceCoordinates[districtKey]) {
+      coord = provinceCoordinates[districtKey];
+    } else if (provinceCoordinates[province.value]) {
+      coord = provinceCoordinates[province.value];
+    }
+    if (coord && mapRef.current) {
+      mapRef.current.flyTo(coord, 12, { animate: true, duration: 2 });
+    }
+  }, []);
 
-  if (provinceCoordinates[districtKey]) {
-    coord = provinceCoordinates[districtKey];
-  } else if (provinceCoordinates[province.value]) {
-    coord = provinceCoordinates[province.value];
-  }
-
-  if (coord && mapRef.current) {
-    console.log("Initial Zooming to:", coord); // ✅ ตรวจสอบตอนเริ่มต้น
-    mapRef.current.flyTo(coord, 12, { animate: true, duration: 2 });
-  }
-}, []);
-
-
-  // 2. รีเซ็ตอำเภอเมื่อเปลี่ยนจังหวัด
   useEffect(() => {
     const firstDistrict = provinces[province.value]?.[0];
     if (firstDistrict) {
@@ -55,121 +54,122 @@ export default function WeatherApp() {
     }
   }, [province]);
 
-  // 3. ซูมไปยังจังหวัดใหม่ทันทีหลังเลือก
-useEffect(() => {
-  if (!province.value || !district.value || !mapRef.current) return;
-
-  const districtKey = `${province.value}_${district.value}`;
-  const districtCoord = provinceCoordinates[districtKey];
-  const provinceCoord = provinceCoordinates[province.value];
-
-  const coord = districtCoord || provinceCoord;
-
-  if (coord) {
-    mapRef.current.flyTo(coord, districtCoord ? 12 : 9, {
-      animate: true,
-      duration: 1.5,
-    });
-  } else {
-    console.warn("ไม่พบพิกัดสำหรับ:", districtKey, "หรือ", province.value);
-  }
-}, [province, district]);
-
-
-  // 4. ซูมไปที่อำเภอ เมื่อเลือกเสร็จ
   useEffect(() => {
-  if (!province.value || !district.value || !mapRef.current) return;
-
-  const districtKey = `${province.value}_${district.value}`;
-  const districtCoord = provinceCoordinates[districtKey];
-  const provinceCoord = provinceCoordinates[province.value];
-
-  const coord = districtCoord || provinceCoord;
-
-  if (coord) {
-    console.log("Zooming to:", coord); // ✅ แสดงค่าพิกัดจริงใน console
-
-    mapRef.current.flyTo(coord, districtCoord ? 12 : 9, {
-      animate: true,
-      duration: 1.5,
-    });
-  } else {
-    console.warn("ไม่พบพิกัดสำหรับ:", districtKey, "หรือ", province.value);
-  }
-}, [province, district]);
-
-
-  // 5. โหลดข้อมูลพยากรณ์อากาศเมื่อ province หรือ district เปลี่ยน
-  // 5. โหลดข้อมูลพยากรณ์อากาศเมื่อ province หรือ district เปลี่ยน
-useEffect(() => {
-  const fetchWeather = async () => {
-    if (!district || !province) return;
-    setLoading(true);
-    setError(null);
-    setWeather(null);
-
-    try {
-      const today = new Date();
-      const startDate = formatDate(today);
-      const endDate = formatDate(new Date(today.setDate(today.getDate() + 7)));
-
-      const location = `${province.value},TH`; // ✅ ใช้เฉพาะจังหวัด (ปลอดภัยกว่า)
-      const encodedLocation = encodeURIComponent(location); // ✅ encode แค่ 1 ครั้ง
-
-      const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodedLocation}/${startDate}/${endDate}?unitGroup=metric&include=days&key=${API_KEY}&contentType=json`;
-
-      // ✅ Debug
-      console.log("Requesting weather for:", location);
-      console.log("Full URL:", url);
-
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
-      const data = await response.json();
-      setWeather(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (!province.value || !district.value || !mapRef.current) return;
+    const districtKey = `${province.value}_${district.value}`;
+    const districtCoord = provinceCoordinates[districtKey];
+    const provinceCoord = provinceCoordinates[province.value];
+    const coord = districtCoord || provinceCoord;
+    if (coord) {
+      mapRef.current.flyTo(coord, districtCoord ? 12 : 9, { animate: true, duration: 1.5 });
     }
-  };
+  }, [province, district]);
 
-  fetchWeather();
-}, [province, district]);
+  useEffect(() => {
+    const fetchWeather = async () => {
+      if (!district || !province) return;
+      setLoading(true);
+      setError(null);
+      setWeather(null);
 
+      try {
+        const today = new Date();
+        const startDate = formatDate(today);
+        const endDate = formatDate(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000));
+
+        const location = `${province.value},TH`;
+        const encodedLocation = encodeURIComponent(location);
+
+        const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodedLocation}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
+        const data = await response.json();
+        setWeather(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWeather();
+  }, [province, district]);
+
+  useEffect(() => {
+    if (weather && weather.days && weather.days.length > 0) {
+      setSelectedDay(weather.days[0].datetime);
+    }
+  }, [weather]);
+
+  // อัพเดต t, h, l (เฉลี่ยรายวัน) ทุกครั้งที่ weather หรือ selectedDay เปลี่ยน
+  useEffect(() => {
+    if (weather && selectedDay) {
+      const dayData = weather.days.find((day) => day.datetime === selectedDay);
+      if (dayData) {
+        setT(dayData.temp);
+        setH(dayData.humidity);
+        setL(dayData.uvindex);
+      }
+    }
+  }, [weather, selectedDay]);
+
+  // คำนวณ VPD แบบรายวัน
+  const vpd = useMemo(() => {
+    if (t !== null && h !== null) {
+      const svp = 0.6108 * Math.exp((17.27 * t) / (t + 237.3)); // SVP (kPa)
+      const avp = (h / 100) * svp; // AVP (kPa)
+      const vpdValue = svp - avp;
+      return parseFloat(vpdValue.toFixed(3));
+    }
+    return null;
+  }, [t, h]);
+
+  // ฟังก์ชันคำนวณ VPD จาก temp, humidity รายชั่วโมง
+  function calcVPD(tempC, humidity) {
+    const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+    const avp = (humidity / 100) * svp;
+    const vpdValue = svp - avp;
+    return parseFloat(vpdValue.toFixed(3));
+  }
 
   const provinceOptions = Object.keys(provinces).map((prov) => ({ label: prov, value: prov }));
   const districtOptions = provinces[province.value]?.map((dist) => ({ label: dist, value: dist })) || [];
+  const dayOptions = weather?.days.map((day) => ({ label: day.datetime, value: day.datetime })) || [];
+
+  // ข้อมูลรายชั่วโมงของวันที่เลือก
+  const hourlyData = useMemo(() => {
+    if (!weather || !selectedDay) return [];
+    const day = weather.days.find((d) => d.datetime === selectedDay);
+    return day?.hours || [];
+  }, [weather, selectedDay]);
 
   return (
-    <div style={{ maxWidth: 500, margin: "auto" }}>
+    <div style={{ maxWidth: 600, margin: "auto" }}>
       <h2>พยากรณ์อากาศ</h2>
 
-    <MapContainer
-      center={[13.736717, 100.523186]}
-      zoom={6}
-      style={{ height: 300, width: "100%", marginBottom: 20 }}
-      whenCreated={(mapInstance) => {
-        mapRef.current = mapInstance;
-     }}
->
-
+      <MapContainer
+        center={[13.736717, 100.523186]}
+        zoom={6}
+        style={{ height: 300, width: "100%", marginBottom: 20 }}
+        whenCreated={(mapInstance) => {
+          mapRef.current = mapInstance;
+        }}
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
-        {province.value && provinceCoordinates[province.value] && weather && (
+        {province.value && provinceCoordinates[province.value] && weather && selectedDay && (
           <Marker position={provinceCoordinates[province.value]} icon={googleMarkerIcon}>
             <Popup>
               <div>
                 <strong>{weather.resolvedAddress}</strong>
-                <ul style={{ paddingLeft: 16 }}>
-                  {weather.days.map((day) => (
-                    <li key={day.datetime}>
-                      {day.datetime}: {day.conditions}, {day.temp} °C
-                    </li>
-                  ))}
-                </ul>
+                <p>วันที่: {selectedDay}</p>
+                <p>อุณหภูมิเฉลี่ย: {t} °C</p>
+                <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
+                <p>UV Index เฉลี่ย: {l !== undefined ? l : "ไม่ระบุ"}</p>
+                <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
               </div>
             </Popup>
           </Marker>
@@ -194,29 +194,80 @@ useEffect(() => {
         styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
       />
 
-      <button onClick={() => {}} style={{ padding: 8, width: "100%" }} disabled>
-        ดูสภาพอากาศ ({district.label}, {province.label})
-      </button>
+      {weather && (
+        <>
+          <label>เลือกวันที่:</label>
+          <Select
+            options={dayOptions}
+            value={dayOptions.find((opt) => opt.value === selectedDay)}
+            onChange={(option) => setSelectedDay(option.value)}
+            isSearchable={false}
+            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+          />
+        </>
+      )}
 
       {loading && <p>กำลังโหลดข้อมูล...</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {weather && (
+      {weather && selectedDay && (
         <div style={{ marginTop: 20 }}>
           <h3>{weather.resolvedAddress}</h3>
           <p>จังหวัด: {province.label}</p>
           <p>อำเภอ: {district.label}</p>
-          <p>วันที่เริ่มต้น: {weather.days[0].datetime}</p>
-          <p>วันที่สิ้นสุด: {weather.days[weather.days.length - 1].datetime}</p>
+          <p>วันที่: {selectedDay}</p>
 
-          <h4>พยากรณ์รายวัน</h4>
+          <h4>สภาพอากาศรายวัน</h4>
           <ul>
-            {weather.days.map((day) => (
-              <li key={day.datetime} style={{ marginBottom: 10 }}>
-                <strong>{day.datetime}</strong>: {day.conditions}, อุณหภูมิ {day.temp} °C
-              </li>
-            ))}
+            {weather.days
+              .filter((day) => day.datetime === selectedDay)
+              .map((day) => (
+                <li key={day.datetime}>
+                  สภาพอากาศ: {day.conditions}<br />
+                  อุณหภูมิเฉลี่ย: {day.temp} °C<br />
+                  ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%<br />
+                  UV Index เฉลี่ย: {day.uvindex !== undefined ? day.uvindex : "ไม่ระบุ"}<br />
+                  VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}
+                </li>
+              ))}
           </ul>
+
+          <h4>สภาพอากาศรายชั่วโมง</h4>
+          {hourlyData.length === 0 ? (
+            <p>ไม่มีข้อมูลรายชั่วโมง</p>
+          ) : (
+            <table border="1" cellPadding="5" style={{ borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>เวลา</th>
+                  <th>อุณหภูมิ (°C)</th>
+                  <th>ความชื้น (%)</th>
+                  <th>UV Index</th>
+                  <th>VPD (kPa)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hourlyData.map((hour) => (
+                  <tr key={hour.datetime}>
+                    <td>
+                      {hour.datetimeEpoch
+                        ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : "ไม่ระบุ"}
+                     </td>
+
+                    <td>{hour.temp !== undefined ? hour.temp.toFixed(1) : "ไม่ระบุ"}</td>
+                    <td>{hour.humidity !== undefined ? hour.humidity.toFixed(0) : "ไม่ระบุ"}</td>
+                    <td>{hour.uvindex !== undefined ? hour.uvindex : "ไม่ระบุ"}</td>
+                    <td>
+                      {hour.temp !== undefined && hour.humidity !== undefined
+                        ? calcVPD(hour.temp, hour.humidity)
+                        : "ไม่ระบุ"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>
