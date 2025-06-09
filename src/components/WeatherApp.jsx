@@ -143,7 +143,8 @@ export default function WeatherApp() {
           <Marker position={mapCenter} icon={googleMarkerIcon}>
             <Popup>
               <div>
-                <strong>{weather.resolvedAddress}</strong>
+                {/* <strong>{weather.resolvedAddress}</strong> */}
+
                 <p>วันที่: {selectedDay}</p>
                 <p>อุณหภูมิเฉลี่ย: {t} °C</p>
                 <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
@@ -191,10 +192,10 @@ export default function WeatherApp() {
 
       {weather && selectedDay && (
         <div style={{ marginTop: 20 }}>
-          <h3>{weather.resolvedAddress}</h3>
-          <p>จังหวัด: {province.label}</p>
-          <p>อำเภอ: {district.label}</p>
-          <p>วันที่: {selectedDay}</p>
+          {/* <h3>{weather.resolvedAddress}</h3> */}
+          {/* <p>จังหวัด: {province.label}</p> */}
+          {/* <p>อำเภอ: {district.label}</p> */}
+          {/* <p>วันที่: {selectedDay}</p> */}
 
           <h4>สภาพอากาศรายวัน</h4>
           <ul>
