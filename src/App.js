@@ -1,13 +1,12 @@
 // src/App.js
 import React from "react";
+import DashboardLayout from "./components/DashboardLayout";
 import WeatherApp from "./components/WeatherApp";
 
-function App() {
+export default function App() {
   return (
-    <div className="App">
+    <DashboardLayout>
       <WeatherApp />
-    </div>
+    </DashboardLayout>
   );
 }
-
-export default App;
