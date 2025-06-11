@@ -7,6 +7,7 @@ import L from "leaflet";
 import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
+import { calculateETo } from "../utils/calculateETo"; // ปรับ path ตามที่เก็บไฟล์จริง
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -41,6 +42,7 @@ export default function WeatherApp() {
   const [t, setT] = useState(null);
   const [h, setH] = useState(null);
   const [l, setL] = useState(null);
+  const [eto, setETo] = useState(null);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
@@ -88,25 +90,55 @@ export default function WeatherApp() {
     }
   }, [weather]);
 
-useEffect(() => {
-  if (weather && selectedDay) {
-    const dayData = weather.days.find((day) => day.datetime === selectedDay);
-    if (dayData) {
-      setT(dayData.temp);
-      setH(dayData.humidity);
-      setL(dayData.uvindex);
+  useEffect(() => {
+    if (weather && selectedDay) {
+      const dayData = weather.days.find((day) => day.datetime === selectedDay);
+      if (dayData) {
+        setT(dayData.temp);
+        setH(dayData.humidity);
+        setL(dayData.uvindex);
 
-      console.log(
-        "จังหวัด:", province.label,
-        "อำเภอ:", district.label,
-        "วันที่:", dayData.datetime,
-        "อุณหภูมิเฉลี่ย (°C):", dayData.temp,
-        "ความชื้นสัมพัทธ์เฉลี่ย (%):", dayData.humidity,
-        "UV Index เฉลี่ย:", dayData.uvindex
-      );
+        console.log(
+          "จังหวัด:", province.label,
+          "อำเภอ:", district.label,
+          "วันที่:", dayData.datetime,
+          "อุณหภูมิเฉลี่ย (°C):", dayData.temp,
+          "ความชื้นสัมพัทธ์เฉลี่ย (%):", dayData.humidity,
+          "UV Index เฉลี่ย:", dayData.uvindex
+        );
+      }
     }
-  }
-}, [weather, selectedDay, province.label, district.label]);
+  }, [weather, selectedDay, province.label, district.label]);
+
+  // คำนวณ ETo เมื่อ weather หรือ selectedDay เปลี่ยน
+  useEffect(() => {
+    if (!weather || !selectedDay) return;
+
+    const dayData = weather.days.find((day) => day.datetime === selectedDay);
+    if (!dayData) return;
+
+    const tMax = dayData.tempmax || dayData.temp || 25;
+    const tMin = dayData.tempmin || dayData.temp || 15;
+    const tMean = dayData.temp || ((tMax + tMin) / 2);
+    const rhMax = dayData.humiditymax || dayData.humidity || 80;
+    const rhMin = dayData.humiditymin || dayData.humidity || 40;
+    const windSpeed = dayData.windspeed || 2;
+    const solarRadiation = dayData.solarradiation || 15;
+    const altitude = 100; // ปรับตามจังหวัดหรือข้อมูลจริง
+
+    const etoValue = calculateETo({
+      tMax,
+      tMin,
+      tMean,
+      rhMax,
+      rhMin,
+      windSpeed,
+      solarRadiation,
+      altitude,
+    });
+
+    setETo(etoValue);
+  }, [weather, selectedDay]);
 
   const vpd = useMemo(() => {
     if (t !== null && h !== null) {
@@ -136,141 +168,143 @@ useEffect(() => {
     return day?.hours || [];
   }, [weather, selectedDay]);
 
- return (
-  <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
-    <h2>พยากรณ์อากาศ</h2>
+  return (
+    <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
+      <h2>พยากรณ์อากาศ</h2>
 
-    <div className="row">
-      {/* ฝั่งซ้าย: แผนที่ + ข้อมูลจังหวัด อำเภอ วันที่ + สภาพอากาศรายวัน */}
-      <div className="col-6">
-        <MapContainer
-          center={[13.736717, 100.523186]}
-          zoom={10}
-          style={{ height: 300, width: "100%", marginBottom: 20 }}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <FlyToLocation coordinates={mapCenter} />
-          {mapCenter && weather && selectedDay && (
-            <Marker position={mapCenter} icon={googleMarkerIcon}>
-              <Popup>
-                <div>
-                  <p>วันที่: {selectedDay}</p>
-                  <p>อุณหภูมิเฉลี่ย: {t} °C</p>
-                  <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
-                  <p>UV Index เฉลี่ย: {l !== undefined ? l : "ไม่ระบุ"}</p>
-                  <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
-                </div>
-              </Popup>
-            </Marker>
-          )}
-        </MapContainer>
-
-        <label htmlFor="province-select">จังหวัด:</label>
-        <Select
-          inputId="province-select"
-          options={provinceOptions}
-          value={province}
-          onChange={setProvince}
-          isSearchable
-          styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
-        />
-
-        <label htmlFor="district-select">อำเภอ:</label>
-        <Select
-          inputId="district-select"
-          options={districtOptions}
-          value={district}
-          onChange={setDistrict}
-          isSearchable
-          styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
-        />
-
-        {weather && (
-          <>
-            <label htmlFor="day-select">เลือกวันที่:</label>
-            <Select
-              inputId="day-select"
-              options={dayOptions}
-              value={dayOptions.find((opt) => opt.value === selectedDay)}
-              onChange={(option) => setSelectedDay(option.value)}
-              isSearchable={false}
-              styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
-            />
-          </>
-        )}
-
-        {loading && <p>กำลังโหลดข้อมูล...</p>}
-        {error && <p style={{ color: "red" }}>{error}</p>}
-
-        {weather && selectedDay && (
-          <div style={{ marginTop: 20 }}>
-            <h4>สภาพอากาศรายวัน</h4>
-            {weather.days
-              .filter((day) => day.datetime === selectedDay)
-              .map((day) => (
-                <div key={day.datetime}>
-                  <p>สภาพอากาศ: {day.conditions}</p>
-                  <p>อุณหภูมิเฉลี่ย: {day.temp} °C</p>
-                  <p>ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%</p>
-                  <p>UV Index เฉลี่ย: {day.uvindex !== undefined ? day.uvindex : "ไม่ระบุ"}</p>
-                  <p>VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}</p>
-                </div>
-              ))}
-          </div>
-        )}
-      </div>
-
-      {/* ฝั่งขวา: ตาราง + กราฟ */}
-      <div className="col-6">
-        <h4>สภาพอากาศรายชั่วโมง</h4>
-        {hourlyData.length === 0 ? (
-          <p>ไม่มีข้อมูลรายชั่วโมง</p>
-        ) : (
-          <table
-            border="1"
-            cellPadding="5"
-            style={{ borderCollapse: "collapse", width: "100%" }}
+      <div className="row">
+        {/* ฝั่งซ้าย: แผนที่ + ข้อมูลจังหวัด อำเภอ วันที่ + สภาพอากาศรายวัน */}
+        <div className="col-6">
+          <MapContainer
+            center={[13.736717, 100.523186]}
+            zoom={10}
+            style={{ height: 300, width: "100%", marginBottom: 20 }}
           >
-            <thead>
-              <tr>
-                <th>เวลา</th>
-                <th>อุณหภูมิ (°C)</th>
-                <th>ความชื้น (%)</th>
-                <th>UV Index</th>
-                <th>VPD (kPa)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hourlyData.map((hour) => (
-                <tr key={hour.datetime}>
-                  <td>
-                    {hour.datetimeEpoch
-                      ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "ไม่ระบุ"}
-                  </td>
-                  <td>{hour.temp !== undefined ? hour.temp.toFixed(1) : "ไม่ระบุ"}</td>
-                  <td>{hour.humidity !== undefined ? hour.humidity.toFixed(0) : "ไม่ระบุ"}</td>
-                  <td>{hour.uvindex !== undefined ? hour.uvindex : "ไม่ระบุ"}</td>
-                  <td>
-                    {hour.temp !== undefined && hour.humidity !== undefined
-                      ? calcVPD(hour.temp, hour.humidity)
-                      : "ไม่ระบุ"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <FlyToLocation coordinates={mapCenter} />
+            {mapCenter && weather && selectedDay && (
+              <Marker position={mapCenter} icon={googleMarkerIcon}>
+                <Popup>
+                  <div>
+                    <p>วันที่: {selectedDay}</p>
+                    <p>อุณหภูมิเฉลี่ย: {t} °C</p>
+                    <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
+                    <p>UV Index เฉลี่ย: {l !== undefined ? l : "ไม่ระบุ"}</p>
+                    <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
+                    <p>ETo (Reference Evapotranspiration): {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}</p>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+          </MapContainer>
 
-        <VPDDailyChart weather={weather} selectedDay={selectedDay} />
+          <label htmlFor="province-select">จังหวัด:</label>
+          <Select
+            inputId="province-select"
+            options={provinceOptions}
+            value={province}
+            onChange={setProvince}
+            isSearchable
+            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+          />
+
+          <label htmlFor="district-select">อำเภอ:</label>
+          <Select
+            inputId="district-select"
+            options={districtOptions}
+            value={district}
+            onChange={setDistrict}
+            isSearchable
+            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+          />
+
+          {weather && (
+            <>
+              <label htmlFor="day-select">เลือกวันที่:</label>
+              <Select
+                inputId="day-select"
+                options={dayOptions}
+                value={dayOptions.find((opt) => opt.value === selectedDay)}
+                onChange={(option) => setSelectedDay(option.value)}
+                isSearchable={false}
+                styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+              />
+            </>
+          )}
+
+          {loading && <p>กำลังโหลดข้อมูล...</p>}
+          {error && <p style={{ color: "red" }}>{error}</p>}
+
+          {weather && selectedDay && (
+            <div style={{ marginTop: 20 }}>
+              <h4>สภาพอากาศรายวัน</h4>
+              {weather.days
+                .filter((day) => day.datetime === selectedDay)
+                .map((day) => (
+                  <div key={day.datetime}>
+                    <p>สภาพอากาศ: {day.conditions}</p>
+                    <p>อุณหภูมิเฉลี่ย: {day.temp} °C</p>
+                    <p>ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%</p>
+                    <p>UV Index เฉลี่ย: {day.uvindex !== undefined ? day.uvindex : "ไม่ระบุ"}</p>
+                    <p>VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}</p>
+                    <p>ETo (Reference Evapotranspiration): {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}</p>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* ฝั่งขวา: ตาราง + กราฟ */}
+        <div className="col-6">
+          <h4>สภาพอากาศรายชั่วโมง</h4>
+          {hourlyData.length === 0 ? (
+            <p>ไม่มีข้อมูลรายชั่วโมง</p>
+          ) : (
+            <table
+              border="1"
+              cellPadding="5"
+              style={{ borderCollapse: "collapse", width: "100%" }}
+            >
+              <thead>
+                <tr>
+                  <th>เวลา</th>
+                  <th>อุณหภูมิ (°C)</th>
+                  <th>ความชื้น (%)</th>
+                  <th>UV Index</th>
+                  <th>VPD (kPa)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hourlyData.map((hour) => (
+                  <tr key={hour.datetime}>
+                    <td>
+                      {hour.datetimeEpoch
+                        ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "ไม่ระบุ"}
+                    </td>
+                    <td>{hour.temp !== undefined ? hour.temp.toFixed(1) : "ไม่ระบุ"}</td>
+                    <td>{hour.humidity !== undefined ? hour.humidity.toFixed(0) : "ไม่ระบุ"}</td>
+                    <td>{hour.uvindex !== undefined ? hour.uvindex : "ไม่ระบุ"}</td>
+                    <td>
+                      {hour.temp !== undefined && hour.humidity !== undefined
+                        ? calcVPD(hour.temp, hour.humidity)
+                        : "ไม่ระบุ"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <VPDDailyChart weather={weather} selectedDay={selectedDay} />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 }
