@@ -175,6 +175,16 @@ export default function WeatherApp() {
     }, 0).toFixed(3);
   }, [hourlyData]);
 
+  // เพิ่ม waterBalance ตามที่ขอ
+  const waterBalance = useMemo(() => {
+    if (!weather || !selectedDay) return null;
+
+    const day = weather.days.find((d) => d.datetime === selectedDay);
+    if (!day || day.precip === undefined) return null;
+
+    return (day.precip - parseFloat(totalDailyETo)).toFixed(2);
+  }, [weather, selectedDay, totalDailyETo]);
+
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
       <h2>พยากรณ์อากาศ</h2>
@@ -198,7 +208,7 @@ export default function WeatherApp() {
                     <p>วันที่: {selectedDay}</p>
                     <p>อุณหภูมิเฉลี่ย: {t} °C</p>
                     <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
-                    <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {l !== undefined ? `${((l * 86400) / 1e6).toFixed(2)} MJ/m²/day` : "ไม่ระบุ"}</p>
+                    <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {l !== undefined ? ((l * 86400) / 1e6).toFixed(2) : "ไม่ระบุ"} MJ/m²/day</p>
                     <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
                     <p>ETo (Reference Evapotranspiration): {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}</p>
                   </div>
@@ -208,10 +218,24 @@ export default function WeatherApp() {
           </MapContainer>
 
           <label htmlFor="province-select">จังหวัด:</label>
-          <Select inputId="province-select" options={provinceOptions} value={province} onChange={setProvince} isSearchable styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
+          <Select
+            inputId="province-select"
+            options={provinceOptions}
+            value={province}
+            onChange={setProvince}
+            isSearchable
+            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+          />
 
           <label htmlFor="district-select">อำเภอ:</label>
-          <Select inputId="district-select" options={districtOptions} value={district} onChange={setDistrict} isSearchable styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
+          <Select
+            inputId="district-select"
+            options={districtOptions}
+            value={district}
+            onChange={setDistrict}
+            isSearchable
+            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+          />
 
           {weather && (
             <>
@@ -247,6 +271,7 @@ export default function WeatherApp() {
                     <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {solarRadiation} MJ/m²/day</p>
                     <p>VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}</p>
                     <p>ETo (Reference Evapotranspiration): {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}</p>
+
                   </div>
                 );
               })}
@@ -278,12 +303,12 @@ export default function WeatherApp() {
                     const wind = hour.windspeed || 2;
                     const radiationWm2 = hour.solarradiation;
                     const solarRadiationMJ = radiationWm2 !== undefined ? (radiationWm2 * 3600) / 1e6 : null;
-                  
+
                     const etoHourly =
                       temp !== undefined && humidity !== undefined && solarRadiationMJ !== null
                         ? calculateHourlyETo({ temp, humidity, windSpeed: wind, solarRadiation: solarRadiationMJ, altitude: 100 })
                         : null;
-                  
+
                     return (
                       <tr key={hour.datetime}>
                         <td>{hour.datetimeEpoch ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "ไม่ระบุ"}</td>
@@ -298,15 +323,16 @@ export default function WeatherApp() {
                 </tbody>
               </table>
               <div style={{ marginTop: 10, fontWeight: "bold" }}>รวม ETo รายวัน: {totalDailyETo} mm</div>
-              {weather && selectedDay && (
-                <div style={{ fontWeight: "bold" }}>
-                  ปริมาณน้ำฝนรายวัน: {
-                    weather.days.find((day) => day.datetime === selectedDay)?.precip !== undefined
-                      ? `${weather.days.find((day) => day.datetime === selectedDay).precip.toFixed(2)} mm`
-                      : "ไม่ระบุ"
-                  }
-                </div>
-              )}
+              <div style={{ marginTop: 10, fontWeight: "bold" }}>
+              <div>
+                ปริมาณน้ำฝนรายวัน: {weather && selectedDay
+                  ? weather.days.find((d) => d.datetime === selectedDay)?.precip?.toFixed(2) ?? "ไม่ระบุ"
+                  : "ไม่ระบุ"} mm
+              </div>
+              <div style={{ color: waterBalance < 0 ? "red" : "green" }}>
+                ปริมาณน้ำฝน - ETo: {waterBalance !== null ? `${waterBalance} mm` : "ไม่ระบุ"}
+              </div>
+            </div>
             </>
           )}
 
