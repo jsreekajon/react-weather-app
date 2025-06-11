@@ -7,7 +7,7 @@ import L from "leaflet";
 import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
-import { calculateETo } from "../utils/calculateETo"; // ปรับ path ตามที่เก็บไฟล์จริง
+import { calculateETo } from "../utils/calculateETo";
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -96,21 +96,11 @@ export default function WeatherApp() {
       if (dayData) {
         setT(dayData.temp);
         setH(dayData.humidity);
-        setL(dayData.uvindex);
-
-        console.log(
-          "จังหวัด:", province.label,
-          "อำเภอ:", district.label,
-          "วันที่:", dayData.datetime,
-          "อุณหภูมิเฉลี่ย (°C):", dayData.temp,
-          "ความชื้นสัมพัทธ์เฉลี่ย (%):", dayData.humidity,
-          "UV Index เฉลี่ย:", dayData.uvindex
-        );
+        setL(dayData.solarradiation);
       }
     }
-  }, [weather, selectedDay, province.label, district.label]);
+  }, [weather, selectedDay]);
 
-  // คำนวณ ETo เมื่อ weather หรือ selectedDay เปลี่ยน
   useEffect(() => {
     if (!weather || !selectedDay) return;
 
@@ -123,8 +113,10 @@ export default function WeatherApp() {
     const rhMax = dayData.humiditymax || dayData.humidity || 80;
     const rhMin = dayData.humiditymin || dayData.humidity || 40;
     const windSpeed = dayData.windspeed || 2;
-    const solarRadiation = dayData.solarradiation || 15;
-    const altitude = 100; // ปรับตามจังหวัดหรือข้อมูลจริง
+
+    const solarRadiationWm2 = dayData.solarradiation || 15;
+    const solarRadiation = (solarRadiationWm2 * 86400) / 1e6;
+    const altitude = 100;
 
     const etoValue = calculateETo({
       tMax,
@@ -173,7 +165,6 @@ export default function WeatherApp() {
       <h2>พยากรณ์อากาศ</h2>
 
       <div className="row">
-        {/* ฝั่งซ้าย: แผนที่ + ข้อมูลจังหวัด อำเภอ วันที่ + สภาพอากาศรายวัน */}
         <div className="col-6">
           <MapContainer
             center={[13.736717, 100.523186]}
@@ -192,7 +183,7 @@ export default function WeatherApp() {
                     <p>วันที่: {selectedDay}</p>
                     <p>อุณหภูมิเฉลี่ย: {t} °C</p>
                     <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
-                    <p>UV Index เฉลี่ย: {l !== undefined ? l : "ไม่ระบุ"}</p>
+                    <p>Solar Radiation เฉลี่ย: {l !== undefined ? `${((l * 86400) / 1e6).toFixed(2)} MJ/m²/day` : "ไม่ระบุ"}</p>
                     <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
                     <p>ETo (Reference Evapotranspiration): {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}</p>
                   </div>
@@ -248,7 +239,7 @@ export default function WeatherApp() {
                     <p>สภาพอากาศ: {day.conditions}</p>
                     <p>อุณหภูมิเฉลี่ย: {day.temp} °C</p>
                     <p>ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%</p>
-                    <p>UV Index เฉลี่ย: {day.uvindex !== undefined ? day.uvindex : "ไม่ระบุ"}</p>
+                    <p>Solar Radiation เฉลี่ย: {day.solarradiation !== undefined ? `${((day.solarradiation * 86400) / 1e6).toFixed(2)} MJ/m²/day` : "ไม่ระบุ"}</p>
                     <p>VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}</p>
                     <p>ETo (Reference Evapotranspiration): {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}</p>
                   </div>
@@ -257,7 +248,6 @@ export default function WeatherApp() {
           )}
         </div>
 
-        {/* ฝั่งขวา: ตาราง + กราฟ */}
         <div className="col-6">
           <h4>สภาพอากาศรายชั่วโมง</h4>
           {hourlyData.length === 0 ? (
