@@ -7,7 +7,8 @@ import L from "leaflet";
 import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
-import { calculateETo } from "../utils/calculateETo";
+import { calculateHourlyETo } from "../utils/calculateETo";
+import "../styles/WeatherTable.css";
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -118,16 +119,14 @@ export default function WeatherApp() {
     const solarRadiation = (solarRadiationWm2 * 86400) / 1e6;
     const altitude = 100;
 
-    const etoValue = calculateETo({
-      tMax,
-      tMin,
-      tMean,
-      rhMax,
-      rhMin,
+    const etoValue = calculateHourlyETo({
+      temp: tMean,
+      humidity: (rhMax + rhMin) / 2,
       windSpeed,
       solarRadiation,
       altitude,
     });
+
 
     setETo(etoValue);
   }, [weather, selectedDay]);
@@ -183,7 +182,7 @@ export default function WeatherApp() {
                     <p>วันที่: {selectedDay}</p>
                     <p>อุณหภูมิเฉลี่ย: {t} °C</p>
                     <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
-                    <p>Solar Radiation เฉลี่ย: {l !== undefined ? `${((l * 86400) / 1e6).toFixed(2)} MJ/m²/day` : "ไม่ระบุ"}</p>
+                    <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {l !== undefined ? `${((l * 86400) / 1e6).toFixed(2)} MJ/m²/day` : "ไม่ระบุ"}</p>
                     <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
                     <p>ETo (Reference Evapotranspiration): {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}</p>
                   </div>
@@ -193,24 +192,10 @@ export default function WeatherApp() {
           </MapContainer>
 
           <label htmlFor="province-select">จังหวัด:</label>
-          <Select
-            inputId="province-select"
-            options={provinceOptions}
-            value={province}
-            onChange={setProvince}
-            isSearchable
-            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
-          />
+          <Select inputId="province-select" options={provinceOptions} value={province} onChange={setProvince} isSearchable styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
 
           <label htmlFor="district-select">อำเภอ:</label>
-          <Select
-            inputId="district-select"
-            options={districtOptions}
-            value={district}
-            onChange={setDistrict}
-            isSearchable
-            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
-          />
+          <Select inputId="district-select" options={districtOptions} value={district} onChange={setDistrict} isSearchable styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }} />
 
           {weather && (
             <>
@@ -232,18 +217,23 @@ export default function WeatherApp() {
           {weather && selectedDay && (
             <div style={{ marginTop: 20 }}>
               <h4>สภาพอากาศรายวัน</h4>
-              {weather.days
-                .filter((day) => day.datetime === selectedDay)
-                .map((day) => (
+              {weather.days.filter((day) => day.datetime === selectedDay).map((day) => {
+                const solarRadiation =
+                  day.solarradiation !== undefined
+                    ? ((day.solarradiation * 86400) / 1e6).toFixed(2)
+                    : "ไม่ระบุ";
+
+                return (
                   <div key={day.datetime}>
                     <p>สภาพอากาศ: {day.conditions}</p>
                     <p>อุณหภูมิเฉลี่ย: {day.temp} °C</p>
                     <p>ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%</p>
-                    <p>Solar Radiation เฉลี่ย: {day.solarradiation !== undefined ? `${((day.solarradiation * 86400) / 1e6).toFixed(2)} MJ/m²/day` : "ไม่ระบุ"}</p>
+                    <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {solarRadiation} MJ/m²/day</p>
                     <p>VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}</p>
                     <p>ETo (Reference Evapotranspiration): {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}</p>
                   </div>
-                ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -253,41 +243,41 @@ export default function WeatherApp() {
           {hourlyData.length === 0 ? (
             <p>ไม่มีข้อมูลรายชั่วโมง</p>
           ) : (
-            <table
-              border="1"
-              cellPadding="5"
-              style={{ borderCollapse: "collapse", width: "100%" }}
-            >
+            <table border="1" cellPadding="5" style={{ borderCollapse: "collapse", width: "100%" }}>
               <thead>
                 <tr>
                   <th>เวลา</th>
                   <th>อุณหภูมิ (°C)</th>
                   <th>ความชื้น (%)</th>
-                  <th>UV Index</th>
+                  <th>การแผ่รังสีแสงอาทิตย์ (MJ/m²/day)</th>
                   <th>VPD (kPa)</th>
+                  <th>ETo (mm/hr)</th>
                 </tr>
               </thead>
               <tbody>
-                {hourlyData.map((hour) => (
-                  <tr key={hour.datetime}>
-                    <td>
-                      {hour.datetimeEpoch
-                        ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "ไม่ระบุ"}
-                    </td>
-                    <td>{hour.temp !== undefined ? hour.temp.toFixed(1) : "ไม่ระบุ"}</td>
-                    <td>{hour.humidity !== undefined ? hour.humidity.toFixed(0) : "ไม่ระบุ"}</td>
-                    <td>{hour.uvindex !== undefined ? hour.uvindex : "ไม่ระบุ"}</td>
-                    <td>
-                      {hour.temp !== undefined && hour.humidity !== undefined
-                        ? calcVPD(hour.temp, hour.humidity)
-                        : "ไม่ระบุ"}
-                    </td>
-                  </tr>
-                ))}
+                {hourlyData.map((hour) => {
+                  const temp = hour.temp;
+                  const humidity = hour.humidity;
+                  const wind = hour.windspeed || 2;
+                  const radiationWm2 = hour.solarradiation;
+                  const solarRadiationMJ = radiationWm2 !== undefined ? (radiationWm2 * 3600) / 1e6 : null;
+
+                  const etoHourly =
+                    temp !== undefined && humidity !== undefined && solarRadiationMJ !== null
+                      ? calculateHourlyETo({ temp, humidity, windSpeed: wind, solarRadiation: solarRadiationMJ, altitude: 100 })
+                      : null;
+
+                  return (
+                    <tr key={hour.datetime}>
+                      <td>{hour.datetimeEpoch ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "ไม่ระบุ"}</td>
+                      <td>{temp !== undefined ? temp.toFixed(1) : "ไม่ระบุ"}</td>
+                      <td>{humidity !== undefined ? humidity.toFixed(0) : "ไม่ระบุ"}</td>
+                      <td>{solarRadiationMJ !== null ? solarRadiationMJ.toFixed(2) : "ไม่ระบุ"}</td>
+                      <td>{temp !== undefined && humidity !== undefined ? calcVPD(temp, humidity) : "ไม่ระบุ"}</td>
+                      <td>{etoHourly !== null ? etoHourly.toFixed(3) : "ไม่ระบุ"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
