@@ -9,6 +9,7 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import "../styles/WeatherTable.css";
+import { kcOptions } from '../data/kcOptions';
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -33,8 +34,14 @@ export default function WeatherApp() {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
-  const [province, setProvince] = useState({ label: defaultProvince, value: defaultProvince });
-  const [district, setDistrict] = useState({ label: defaultDistrict, value: defaultDistrict });
+  const [province, setProvince] = useState({
+    label: defaultProvince,
+    value: defaultProvince,
+  });
+  const [district, setDistrict] = useState({
+    label: defaultDistrict,
+    value: defaultDistrict,
+  });
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -43,6 +50,8 @@ export default function WeatherApp() {
   const [h, setH] = useState(null);
   const [l, setL] = useState(null);
   const [eto, setETo] = useState(null);
+  const [canopyRadius, setCanopyRadius] = useState(1); // Default 1 meter
+  const [kc, setKc] = useState(kcOptions[0]); // Default Kc
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
@@ -63,7 +72,9 @@ export default function WeatherApp() {
       try {
         const today = new Date();
         const startDate = formatDate(today);
-        const endDate = formatDate(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000));
+        const endDate = formatDate(
+          new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+        );
         const location = `${province.value},TH`;
         const encodedLocation = encodeURIComponent(location);
 
@@ -108,7 +119,7 @@ export default function WeatherApp() {
 
     const tMax = dayData.tempmax || dayData.temp || 25;
     const tMin = dayData.tempmin || dayData.temp || 15;
-    const tMean = dayData.temp || ((tMax + tMin) / 2);
+    const tMean = dayData.temp || (tMax + tMin) / 2;
     const rhMax = dayData.humiditymax || dayData.humidity || 80;
     const rhMin = dayData.humiditymin || dayData.humidity || 40;
     const windSpeed = dayData.windspeed || 2;
@@ -143,12 +154,22 @@ export default function WeatherApp() {
     return parseFloat((svp - avp).toFixed(3));
   };
 
-  const provinceOptions = Object.keys(provinces).map((prov) => ({ label: prov, value: prov }));
-  const districtOptions = provinces[province.value]?.map((dist) => ({ label: dist, value: dist })) || [];
-  const dayOptions = weather?.days.map((day) => ({ label: day.datetime, value: day.datetime })) || [];
+  const provinceOptions = Object.keys(provinces).map((prov) => ({
+    label: prov,
+    value: prov,
+  }));
+  const districtOptions =
+    provinces[province.value]?.map((dist) => ({ label: dist, value: dist })) ||
+    [];
+  const dayOptions =
+    weather?.days.map((day) => ({
+      label: day.datetime,
+      value: day.datetime,
+    })) || [];
 
   const coordKey = `${province.value}_${district.value}`;
-  const mapCenter = provinceCoordinates[coordKey] || provinceCoordinates[province.value];
+  const mapCenter =
+    provinceCoordinates[coordKey] || provinceCoordinates[province.value];
 
   const hourlyData = useMemo(() => {
     if (!weather || !selectedDay) return [];
@@ -157,25 +178,35 @@ export default function WeatherApp() {
   }, [weather, selectedDay]);
 
   const totalDailyETo = useMemo(() => {
-    return hourlyData.reduce((sum, hour) => {
-      const temp = hour.temp;
-      const humidity = hour.humidity;
-      const wind = hour.windspeed || 2;
-      const radiationWm2 = hour.solarradiation;
-      const solarRadiationMJ = (radiationWm2 !== undefined && radiationWm2 !== null) ? (radiationWm2 * 3600) / 1e6 : null;
+    return hourlyData
+      .reduce((sum, hour) => {
+        const temp = hour.temp;
+        const humidity = hour.humidity;
+        const wind = hour.windspeed || 2;
+        const radiationWm2 = hour.solarradiation;
+        const solarRadiationMJ =
+          radiationWm2 !== undefined && radiationWm2 !== null
+            ? (radiationWm2 * 3600) / 1e6
+            : null;
 
-      if (temp === undefined || humidity === undefined || solarRadiationMJ === null) return sum;
+        if (
+          temp === undefined ||
+          humidity === undefined ||
+          solarRadiationMJ === null
+        )
+          return sum;
 
-      const etoHourly = calculateHourlyETo({
-        temp,
-        humidity,
-        windSpeed: wind,
-        solarRadiation: solarRadiationMJ,
-        altitude: 100,
-      });
+        const etoHourly = calculateHourlyETo({
+          temp,
+          humidity,
+          windSpeed: wind,
+          solarRadiation: solarRadiationMJ,
+          altitude: 100,
+        });
 
-      return isNaN(etoHourly) ? sum : sum + etoHourly;
-    }, 0).toFixed(3);
+        return isNaN(etoHourly) ? sum : sum + etoHourly;
+      }, 0)
+      .toFixed(3);
   }, [hourlyData]);
 
   const waterBalance = useMemo(() => {
@@ -190,6 +221,26 @@ export default function WeatherApp() {
 
     return diffLitersPerRai.toFixed(0);
   }, [weather, selectedDay, totalDailyETo]);
+
+  const canopyAreaSqM = useMemo(() => {
+    const r = parseFloat(canopyRadius);
+    return !isNaN(r) ? (Math.PI * r * r).toFixed(2) : null;
+  }, [canopyRadius]);
+
+  const waterPerTree = useMemo(() => {
+    if (canopyAreaSqM && totalDailyETo) {
+      return (parseFloat(canopyAreaSqM) * parseFloat(totalDailyETo)).toFixed(2); // หน่วย: ลิตร/ต้น
+    }
+    return null;
+  }, [canopyAreaSqM, totalDailyETo]);
+
+  const etc = useMemo(() => {
+  if (eto !== null && kc?.value !== undefined) {
+    return (eto * kc.value).toFixed(3); // mm/day
+  }
+  return null;
+}, [eto, kc]);
+
 
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
@@ -214,9 +265,21 @@ export default function WeatherApp() {
                     <p>วันที่: {selectedDay}</p>
                     <p>อุณหภูมิเฉลี่ย: {t} °C</p>
                     <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
-                    <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {l !== undefined ? ((l * 86400) / 1e6).toFixed(2) : "ไม่ระบุ"} MJ/m²/day</p>
-                    <p>VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}</p>
-                    <p>ETo (Reference Evapotranspiration): {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}</p>
+                    <p>
+                      การแผ่รังสีแสงอาทิตย์เฉลี่ย:{" "}
+                      {l !== undefined
+                        ? ((l * 86400) / 1e6).toFixed(2)
+                        : "ไม่ระบุ"}{" "}
+                      MJ/m²/day
+                    </p>
+                    <p>
+                      VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}
+                    </p>
+                    <p>
+                      ETo (Reference Evapotranspiration):{" "}
+                      {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}
+                    </p>
+                    
                   </div>
                 </Popup>
               </Marker>
@@ -243,6 +306,26 @@ export default function WeatherApp() {
             styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
           />
 
+          <label htmlFor="canopy-radius">รัศมีทรงพุ่ม (เมตร):</label>
+          <input
+            id="canopy-radius"
+            type="number"
+            value={canopyRadius}
+            onChange={(e) => setCanopyRadius(e.target.value)}
+            placeholder="ระบุรัศมี (เมตร)"
+            style={{ width: "100%", marginBottom: 10, padding: 5 }}
+          />
+
+          <label htmlFor="kc-select">ช่วงการพัฒนาการของทุเรียน:</label>
+          <Select
+            inputId="kc-select"
+            options={kcOptions}
+            value={kc}
+            onChange={setKc}
+            isSearchable={false}
+            styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+          />
+
           {weather && (
             <>
               <label htmlFor="day-select">เลือกวันที่:</label>
@@ -252,7 +335,9 @@ export default function WeatherApp() {
                 value={dayOptions.find((opt) => opt.value === selectedDay)}
                 onChange={(option) => setSelectedDay(option.value)}
                 isSearchable={false}
-                styles={{ container: (base) => ({ ...base, marginBottom: 10 }) }}
+                styles={{
+                  container: (base) => ({ ...base, marginBottom: 10 }),
+                }}
               />
             </>
           )}
@@ -263,24 +348,32 @@ export default function WeatherApp() {
           {weather && selectedDay && (
             <div style={{ marginTop: 20 }}>
               <h4>สภาพอากาศรายวัน</h4>
-              {weather.days.filter((day) => day.datetime === selectedDay).map((day) => {
-                const solarRadiation =
-                  day.solarradiation !== undefined
-                    ? ((day.solarradiation * 86400) / 1e6).toFixed(2)
-                    : "ไม่ระบุ";
+              {weather.days
+                .filter((day) => day.datetime === selectedDay)
+                .map((day) => {
+                  const solarRadiation =
+                    day.solarradiation !== undefined
+                      ? ((day.solarradiation * 86400) / 1e6).toFixed(2)
+                      : "ไม่ระบุ";
 
-                return (
-                  <div key={day.datetime}>
-                    <p>สภาพอากาศ: {day.conditions}</p>
-                    <p>อุณหภูมิเฉลี่ย: {day.temp} °C</p>
-                    <p>ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%</p>
-                    <p>การแผ่รังสีแสงอาทิตย์เฉลี่ย: {solarRadiation} MJ/m²/day</p>
-                    <p>VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}</p>
-                    <p>ETo (Reference Evapotranspiration): {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}</p>
-
-                  </div>
-                );
-              })}
+                  return (
+                    <div key={day.datetime}>
+                      <p>สภาพอากาศ: {day.conditions}</p>
+                      <p>อุณหภูมิเฉลี่ย: {day.temp} °C</p>
+                      <p>ความชื้นสัมพัทธ์เฉลี่ย: {day.humidity}%</p>
+                      <p>
+                        การแผ่รังสีแสงอาทิตย์เฉลี่ย: {solarRadiation} MJ/m²/day
+                      </p>
+                      <p>
+                        VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}
+                      </p>
+                      <p>
+                        ETo (Reference Evapotranspiration):{" "}
+                        {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}
+                      </p>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
@@ -291,7 +384,11 @@ export default function WeatherApp() {
             <p>ไม่มีข้อมูลรายชั่วโมง</p>
           ) : (
             <>
-              <table border="1" cellPadding="5" style={{ borderCollapse: "collapse", width: "100%" }}>
+              <table
+                border="1"
+                cellPadding="5"
+                style={{ borderCollapse: "collapse", width: "100%" }}
+              >
                 <thead>
                   <tr>
                     <th>เวลา</th>
@@ -308,37 +405,89 @@ export default function WeatherApp() {
                     const humidity = hour.humidity;
                     const wind = hour.windspeed || 2;
                     const radiationWm2 = hour.solarradiation;
-                    const solarRadiationMJ = radiationWm2 !== undefined ? (radiationWm2 * 3600) / 1e6 : null;
+                    const solarRadiationMJ =
+                      radiationWm2 !== undefined
+                        ? (radiationWm2 * 3600) / 1e6
+                        : null;
 
                     const etoHourly =
-                      temp !== undefined && humidity !== undefined && solarRadiationMJ !== null
-                        ? calculateHourlyETo({ temp, humidity, windSpeed: wind, solarRadiation: solarRadiationMJ, altitude: 100 })
+                      temp !== undefined &&
+                      humidity !== undefined &&
+                      solarRadiationMJ !== null
+                        ? calculateHourlyETo({
+                            temp,
+                            humidity,
+                            windSpeed: wind,
+                            solarRadiation: solarRadiationMJ,
+                            altitude: 100,
+                          })
                         : null;
 
                     return (
                       <tr key={hour.datetime}>
-                        <td>{hour.datetimeEpoch ? new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "ไม่ระบุ"}</td>
-                        <td>{temp !== undefined ? temp.toFixed(1) : "ไม่ระบุ"}</td>
-                        <td>{humidity !== undefined ? humidity.toFixed(0) : "ไม่ระบุ"}</td>
-                        <td>{solarRadiationMJ !== null ? solarRadiationMJ.toFixed(2) : "ไม่ระบุ"}</td>
-                        <td>{temp !== undefined && humidity !== undefined ? calcVPD(temp, humidity) : "ไม่ระบุ"}</td>
-                        <td>{etoHourly !== null ? etoHourly.toFixed(3) : "ไม่ระบุ"}</td>
+                        <td>
+                          {hour.datetimeEpoch
+                            ? new Date(
+                                hour.datetimeEpoch * 1000
+                              ).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "ไม่ระบุ"}
+                        </td>
+                        <td>
+                          {temp !== undefined ? temp.toFixed(1) : "ไม่ระบุ"}
+                        </td>
+                        <td>
+                          {humidity !== undefined
+                            ? humidity.toFixed(0)
+                            : "ไม่ระบุ"}
+                        </td>
+                        <td>
+                          {solarRadiationMJ !== null
+                            ? solarRadiationMJ.toFixed(2)
+                            : "ไม่ระบุ"}
+                        </td>
+                        <td>
+                          {temp !== undefined && humidity !== undefined
+                            ? calcVPD(temp, humidity)
+                            : "ไม่ระบุ"}
+                        </td>
+                        <td>
+                          {etoHourly !== null
+                            ? etoHourly.toFixed(3)
+                            : "ไม่ระบุ"}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-              <div style={{ marginTop: 10, fontWeight: "bold" }}>รวม ETo รายวัน: {totalDailyETo} mm</div>
               <div style={{ marginTop: 10, fontWeight: "bold" }}>
-              <div>
-                ปริมาณน้ำฝน รายวัน: {weather && selectedDay
-                  ? weather.days.find((d) => d.datetime === selectedDay)?.precip?.toFixed(2) ?? "ไม่ระบุ"
-                  : "ไม่ระบุ"} mm
+                รวม ETo รายวัน: {totalDailyETo} mm
               </div>
-              <div style={{ color: "blue" }}>
-                ปริมาณน้ำที่ต้องการ รายวัน: {waterBalance !== null ? `${waterBalance} ลิตร/ไร่` : "ไม่ระบุ"}
+              <div style={{ marginTop: 10, fontWeight: "bold" }}>
+                <div>
+                  ปริมาณน้ำฝน รายวัน:{" "}
+                  {weather && selectedDay
+                    ? weather.days
+                        .find((d) => d.datetime === selectedDay)
+                        ?.precip?.toFixed(2) ?? "ไม่ระบุ"
+                    : "ไม่ระบุ"}{" "}
+                  mm
+                </div>
+                <div style={{ color: "blue" }}>
+                  {waterPerTree && (
+                    <div style={{ color: "green", marginTop: 10 }}>
+                      ปริมาณน้ำที่ต้องการรายต้น ≈ {waterPerTree} ลิตร/ต้น
+                    </div>
+                  )}
+                  <div style={{ marginTop: 10, fontWeight: "bold" }}>
+                    ETc (พืชใช้น้ำ):{" "}
+                    {etc !== null ? `${etc} mm/day` : "ไม่ระบุ"}
+                  </div>
+                </div>
               </div>
-            </div>
             </>
           )}
 
