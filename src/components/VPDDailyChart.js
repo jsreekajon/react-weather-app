@@ -10,31 +10,35 @@ import {
 } from "recharts";
 
 const VPDDailyChart = React.memo(function VPDDailyChart({ weather, selectedDay }) {
-  const hourlyVPDData = useMemo(() => {
-    if (!weather?.days || !selectedDay) return [];
+ const hourlyVPDData = useMemo(() => {
+  if (!weather?.days || !selectedDay) return [];
 
-    const dayData = weather.days.find((d) => d.datetime === selectedDay);
-    if (!dayData?.hours) return [];
+  const dayData = weather.days.find((d) => d.datetime === selectedDay);
+  if (!dayData?.hours) return [];
 
-    return dayData.hours.map((hour) => {
-      const t = hour.temp;
-      const h = hour.humidity;
+  return dayData.hours.map((hour) => {
+    const tempC = hour.temp;
+    const humidity = hour.humidity;
 
-      if (t == null || h == null) return null;
+    if (tempC == null || humidity == null) return null;
 
-      const svp = 0.6108 * Math.exp((17.27 * t) / (t + 237.3));
-      const avp = (h / 100) * svp;
-      const vpd = parseFloat((svp - avp).toFixed(3));
+    // Saturated Vapor Pressure (SVP)
+    const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+    // Actual Vapor Pressure (AVP)
+    const avp = svp * (humidity / 100);
+    // Vapor Pressure Deficit (VPD)
+    const vpd = parseFloat((svp - avp).toFixed(3));
 
-      return {
-        time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        vpd,
-      };
-    }).filter(Boolean); // remove null
-  }, [weather, selectedDay]);
+    return {
+      time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      vpd,
+    };
+  }).filter(Boolean); // remove null
+}, [weather, selectedDay]);
+
 
   return (
     <div style={{ marginTop: 40 }}>

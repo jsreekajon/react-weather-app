@@ -9,7 +9,7 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import "../styles/WeatherTable.css";
-import { kcOptions } from '../data/kcOptions';
+import { kcOptions } from "../data/kcOptions";
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -50,8 +50,8 @@ export default function WeatherApp() {
   const [h, setH] = useState(null);
   const [l, setL] = useState(null);
   const [eto, setETo] = useState(null);
-  const [canopyRadius, setCanopyRadius] = useState(1); // Default 1 meter
-  const [kc, setKc] = useState(kcOptions[0]); // Default Kc
+  const [canopyRadius, setCanopyRadius] = useState(1);
+  const [kc, setKc] = useState(kcOptions[0]);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
@@ -209,37 +209,24 @@ export default function WeatherApp() {
       .toFixed(3);
   }, [hourlyData]);
 
-  const waterBalance = useMemo(() => {
-    if (!weather || !selectedDay) return null;
-    const day = weather.days.find((d) => d.datetime === selectedDay);
-    if (!day || day.precip === undefined) return null;
-
-    const etoVal = parseFloat(totalDailyETo);
-    const precip = day.precip;
-    const diffMm = Math.abs(etoVal - precip);
-    const diffLitersPerRai = diffMm * 1600;
-
-    return diffLitersPerRai.toFixed(0);
-  }, [weather, selectedDay, totalDailyETo]);
-
-  const canopyAreaSqM = useMemo(() => {
-    const r = parseFloat(canopyRadius);
-    return !isNaN(r) ? (Math.PI * r * r).toFixed(2) : null;
-  }, [canopyRadius]);
-
-  const waterPerTree = useMemo(() => {
-    if (canopyAreaSqM && totalDailyETo) {
-      return (parseFloat(canopyAreaSqM) * parseFloat(totalDailyETo)).toFixed(2); // หน่วย: ลิตร/ต้น
-    }
-    return null;
-  }, [canopyAreaSqM, totalDailyETo]);
-
-  const etc = useMemo(() => {
+const etc = useMemo(() => {
   if (eto !== null && kc?.value !== undefined) {
     return (eto * kc.value).toFixed(3); // mm/day
   }
   return null;
 }, [eto, kc]);
+
+const canopyAreaSqM = useMemo(() => {
+  const r = parseFloat(canopyRadius);
+  return !isNaN(r) ? (Math.PI * r * r).toFixed(2) : null;
+}, [canopyRadius]);
+
+const waterPerTree = useMemo(() => {
+  if (canopyAreaSqM && etc) {
+    return (parseFloat(canopyAreaSqM) * parseFloat(etc)).toFixed(2); // ลิตร/ต้น
+  }
+  return null;
+}, [canopyAreaSqM, etc]);
 
 
   return (
@@ -275,11 +262,6 @@ export default function WeatherApp() {
                     <p>
                       VPD (รายวัน): {vpd !== null ? vpd + " kPa" : "ไม่ระบุ"}
                     </p>
-                    <p>
-                      ETo (Reference Evapotranspiration):{" "}
-                      {eto !== null ? eto.toFixed(3) + " mm/day" : "ไม่ระบุ"}
-                    </p>
-                    
                   </div>
                 </Popup>
               </Marker>
@@ -367,10 +349,6 @@ export default function WeatherApp() {
                       <p>
                         VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}
                       </p>
-                      <p>
-                        ETo (Reference Evapotranspiration):{" "}
-                        {eto !== null ? `${eto.toFixed(3)} mm/day` : "ไม่ระบุ"}
-                      </p>
                     </div>
                   );
                 })}
@@ -387,7 +365,11 @@ export default function WeatherApp() {
               <table
                 border="1"
                 cellPadding="5"
-                style={{ borderCollapse: "collapse", width: "100%" }}
+                style={{
+                  borderCollapse: "collapse",
+                  width: "100%",
+                  textAlign: "center",
+                }}
               >
                 <thead>
                   <tr>
