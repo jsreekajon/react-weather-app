@@ -26,7 +26,6 @@ function FlyToLocation({ coordinates }) {
       map.flyTo(coordinates, 10, { animate: true, duration: 1.5 });
     }
   }, [coordinates, map]);
-
   return null;
 }
 
@@ -65,7 +64,6 @@ export default function WeatherApp() {
         const today = new Date();
         const startDate = formatDate(today);
         const endDate = formatDate(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000));
-
         const location = `${province.value},TH`;
         const encodedLocation = encodeURIComponent(location);
 
@@ -86,7 +84,7 @@ export default function WeatherApp() {
   }, [province, district]);
 
   useEffect(() => {
-    if (weather && weather.days && weather.days.length > 0) {
+    if (weather?.days?.length > 0) {
       setSelectedDay(weather.days[0].datetime);
     }
   }, [weather]);
@@ -164,25 +162,33 @@ export default function WeatherApp() {
       const humidity = hour.humidity;
       const wind = hour.windspeed || 2;
       const radiationWm2 = hour.solarradiation;
-      const solarRadiationMJ = radiationWm2 !== undefined ? (radiationWm2 * 3600) / 1e6 : null;
+      const solarRadiationMJ = (radiationWm2 !== undefined && radiationWm2 !== null) ? (radiationWm2 * 3600) / 1e6 : null;
 
-      const etoHourly =
-        temp !== undefined && humidity !== undefined && solarRadiationMJ !== null
-          ? calculateHourlyETo({ temp, humidity, windSpeed: wind, solarRadiation: solarRadiationMJ, altitude: 100 })
-          : null;
+      if (temp === undefined || humidity === undefined || solarRadiationMJ === null) return sum;
 
-      return etoHourly !== null ? sum + etoHourly : sum;
+      const etoHourly = calculateHourlyETo({
+        temp,
+        humidity,
+        windSpeed: wind,
+        solarRadiation: solarRadiationMJ,
+        altitude: 100,
+      });
+
+      return isNaN(etoHourly) ? sum : sum + etoHourly;
     }, 0).toFixed(3);
   }, [hourlyData]);
 
-  // เพิ่ม waterBalance ตามที่ขอ
   const waterBalance = useMemo(() => {
     if (!weather || !selectedDay) return null;
-
     const day = weather.days.find((d) => d.datetime === selectedDay);
     if (!day || day.precip === undefined) return null;
 
-    return (day.precip - parseFloat(totalDailyETo)).toFixed(2);
+    const etoVal = parseFloat(totalDailyETo);
+    const precip = day.precip;
+    const diffMm = Math.abs(etoVal - precip);
+    const diffLitersPerRai = diffMm * 1600;
+
+    return diffLitersPerRai.toFixed(0);
   }, [weather, selectedDay, totalDailyETo]);
 
   return (
@@ -325,12 +331,12 @@ export default function WeatherApp() {
               <div style={{ marginTop: 10, fontWeight: "bold" }}>รวม ETo รายวัน: {totalDailyETo} mm</div>
               <div style={{ marginTop: 10, fontWeight: "bold" }}>
               <div>
-                ปริมาณน้ำฝนรายวัน: {weather && selectedDay
+                ปริมาณน้ำฝน รายวัน: {weather && selectedDay
                   ? weather.days.find((d) => d.datetime === selectedDay)?.precip?.toFixed(2) ?? "ไม่ระบุ"
                   : "ไม่ระบุ"} mm
               </div>
-              <div style={{ color: waterBalance < 0 ? "red" : "green" }}>
-                ปริมาณน้ำฝน - ETo: {waterBalance !== null ? `${waterBalance} mm` : "ไม่ระบุ"}
+              <div style={{ color: "blue" }}>
+                ปริมาณน้ำที่ต้องการ รายวัน: {waterBalance !== null ? `${waterBalance} ลิตร/ไร่` : "ไม่ระบุ"}
               </div>
             </div>
             </>
