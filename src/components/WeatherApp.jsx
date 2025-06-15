@@ -48,7 +48,7 @@ export default function WeatherApp() {
   const [t, setT] = useState(null);
   const [h, setH] = useState(null);
   const [l, setL] = useState(null);
-  const [eto, setETo] = useState(null);
+  const [, setETo] = useState(null);
   const [canopyRadius, setCanopyRadius] = useState(1);
   const [kc, setKc] = useState(kcOptions[0]);
 
@@ -189,14 +189,6 @@ export default function WeatherApp() {
     const r = parseFloat(canopyRadius);
     return !isNaN(r) ? Math.PI * r * r : null;
   }, [canopyRadius]);
-
-  // ปริมาณน้ำที่ต้องการรวมฝน = พื้นที่ × ETc (ลิตร)
-  const waterPerTree = useMemo(() => {
-    if (canopyAreaSqM !== null && etc !== null) {
-      return (canopyAreaSqM * etc).toFixed(2);
-    }
-    return null;
-  }, [canopyAreaSqM, etc]);
 
   // ปริมาณน้ำฝนรายวัน (mm)
   const rainfall = useMemo(() => {
