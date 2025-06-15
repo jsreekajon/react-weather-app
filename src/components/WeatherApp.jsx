@@ -53,6 +53,7 @@ export default function WeatherApp() {
   const [kc, setKc] = useState(kcOptions[0]);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
+  
 
   useEffect(() => {
     const firstDistrict = provinces[province.value]?.[0];
@@ -177,9 +178,12 @@ export default function WeatherApp() {
   }, [hourlyData]);
 
   const etc = useMemo(
-  () => (totalDailyETo !== null && kc?.value !== undefined ? totalDailyETo * kc.value : null),
-  [totalDailyETo, kc]
-);
+    () =>
+      totalDailyETo !== null && kc?.value !== undefined
+        ? totalDailyETo * kc.value
+        : null,
+    [totalDailyETo, kc]
+  );
 
   const canopyAreaSqM = useMemo(() => {
     const r = parseFloat(canopyRadius);
@@ -200,7 +204,7 @@ export default function WeatherApp() {
     return rain !== undefined ? parseFloat(rain.toFixed(2)) : null;
   }, [weather, selectedDay]);
 
-  // ปริมาณน้ำที่ต้องการสุทธิ = พื้นที่ × (ETc - น้ำฝน)
+  // ปริมาณน้ำที่ต้องการสุทธิ = พื้นที่ × (tcetcTc - น้ำฝน)
   const waterNetPerTree = useMemo(() => {
     if (canopyAreaSqM !== null && etc !== null && rainfall !== null) {
       const netETc = etc - rainfall;
@@ -316,12 +320,15 @@ export default function WeatherApp() {
                     <th>อุณหภูมิ (°C)</th>
                     <th>ความชื้น (%)</th>
                     <th>แสงอาทิตย์ (MJ/m²/hr)</th>
+                    <th>ความเร็วลม (km/h)</th>
                     <th>VPD (kPa)</th>
                     <th>ETo (mm/hr)</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {hourlyData.map((hour) => {
+                    console.log(hour); // <==== ใส่ตรงนี้
                     const temp = hour.temp;
                     const humidity = hour.humidity;
                     const wind = hour.windspeed || 2;
@@ -365,6 +372,10 @@ export default function WeatherApp() {
                           {solarMJ !== null ? solarMJ.toFixed(2) : "ไม่ระบุ"}
                         </td>
                         <td>
+                          {wind !== undefined ? wind.toFixed(1) : "ไม่ระบุ"}
+                        </td>
+
+                        <td>
                           {temp !== undefined && humidity !== undefined
                             ? calcVPD(temp, humidity)
                             : "ไม่ระบุ"}
@@ -395,7 +406,8 @@ export default function WeatherApp() {
                   rainfall !== null &&
                   canopyAreaSqM !== null && (
                     <div style={{ color: "blue", marginTop: 10 }}>
-                      ปริมาณน้ำสุทธิที่ต้องให้น้ำเอง (หลังหักน้ำฝน) = ({etc.toFixed(3)} - {rainfall.toFixed(2)}) ×{" "}
+                      ปริมาณน้ำสุทธิที่ต้องให้น้ำเอง (หลังหักน้ำฝน) = (
+                      {etc.toFixed(3)} - {rainfall.toFixed(2)}) ×{" "}
                       {canopyAreaSqM.toFixed(4)} = {waterNetPerTree}{" "}
                       ลิตร/ต้น/วัน
                     </div>
