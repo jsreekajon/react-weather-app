@@ -75,6 +75,7 @@ export default function WeatherApp() {
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
           location
         )}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
+        console.log("Fetching weather data from:", url);
         const response = await fetch(url);
         if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
         const data = await response.json();
