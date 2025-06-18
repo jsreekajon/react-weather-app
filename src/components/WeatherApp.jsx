@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Select from "react-select";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
+// เพิ่มเข้าไปบนสุดของไฟล์ WeatherApp.jsx
+import { db } from "../firebase";
+import { collection, addDoc } from "firebase/firestore";
 import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
@@ -51,9 +54,9 @@ export default function WeatherApp() {
   const [, setETo] = useState(null);
   const [canopyRadius, setCanopyRadius] = useState(1);
   const [kc, setKc] = useState(kcOptions[0]);
+  const savedRef = useRef(false);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
-  
 
   useEffect(() => {
     const firstDistrict = provinces[province.value]?.[0];
@@ -212,6 +215,57 @@ export default function WeatherApp() {
     const avp = (humidity / 100) * svp;
     return parseFloat((svp - avp).toFixed(3));
   };
+
+  useEffect(() => {
+  const interval = setInterval(() => {
+    if (
+      vpd !== null &&
+      province &&
+      district &&
+      selectedDay &&
+      totalDailyETo !== null &&
+      rainfall !== null &&
+      etc !== null &&
+      waterNetPerTree !== null
+    ) {
+      const saveRawData = async () => {
+        try {
+          await addDoc(collection(db, "raw_weather"), {
+            province: province.value,
+            district: district.value,
+            canopyRadius: parseFloat(canopyRadius),
+            kc: kc.value,
+            date: new Date(selectedDay),
+            timestamp: new Date(),
+            totalDailyETo: parseFloat(totalDailyETo),
+            rainfall: parseFloat(rainfall),
+            etc: parseFloat(etc.toFixed(3)),
+            waterNetPerTree: parseFloat(waterNetPerTree),
+            vpd,
+          });
+          console.log("✅ บันทึกข้อมูลดิบเรียบร้อย (15 นาที)");
+        } catch (e) {
+          console.error("❌ บันทึกข้อมูลดิบล้มเหลว:", e);
+        }
+      };
+      saveRawData();
+    }
+  }, 15 * 60 * 1000); // 15 นาที
+
+  return () => clearInterval(interval);
+}, [
+  province,
+  district,
+  selectedDay,
+  canopyRadius,
+  kc,
+  totalDailyETo,
+  rainfall,
+  etc,
+  waterNetPerTree,
+  vpd,
+]);
+
 
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
