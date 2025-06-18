@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Select from "react-select";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -12,7 +12,7 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import { kcOptions } from "../data/kcOptions";
-
+import useWeatherAggregator from "../hooks/WeatherDataAggregator"; 
 const API_KEY = "D2HBXFV5VCMLAV8U4C32EUUNK";
 
 const googleMarkerIcon = new L.Icon({
@@ -36,14 +36,8 @@ export default function WeatherApp() {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
-  const [province, setProvince] = useState({
-    label: defaultProvince,
-    value: defaultProvince,
-  });
-  const [district, setDistrict] = useState({
-    label: defaultDistrict,
-    value: defaultDistrict,
-  });
+  const [province, setProvince] = useState({ label: defaultProvince, value: defaultProvince });
+  const [district, setDistrict] = useState({ label: defaultDistrict, value: defaultDistrict });
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -54,10 +48,9 @@ export default function WeatherApp() {
   const [, setETo] = useState(null);
   const [canopyRadius, setCanopyRadius] = useState(1);
   const [kc, setKc] = useState(kcOptions[0]);
-  const savedRef = useRef(false);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
-
+    
   useEffect(() => {
     const firstDistrict = provinces[province.value]?.[0];
     if (firstDistrict)
@@ -78,7 +71,6 @@ export default function WeatherApp() {
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
           location
         )}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
-        console.log("Fetching weather data from:", url);
         const response = await fetch(url);
         if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
         const data = await response.json();
@@ -216,6 +208,7 @@ export default function WeatherApp() {
     return parseFloat((svp - avp).toFixed(3));
   };
 
+
   useEffect(() => {
   const interval = setInterval(() => {
     if (
@@ -230,7 +223,7 @@ export default function WeatherApp() {
     ) {
       const saveRawData = async () => {
         try {
-          await addDoc(collection(db, "raw_weather"), {
+          await addDoc(collection(db, "weather_minute_summary"), {
             province: province.value,
             district: district.value,
             canopyRadius: parseFloat(canopyRadius),
@@ -250,10 +243,22 @@ export default function WeatherApp() {
       };
       saveRawData();
     }
-  }, 15 * 60 * 1000); // 15 นาที
+  }, 10 * 60 * 1000); // 10 นาที
 
   return () => clearInterval(interval);
 }, [
+  province,
+  district,
+  selectedDay,
+  totalDailyETo,
+  rainfall,
+  etc,
+  waterNetPerTree,
+  vpd,
+  canopyRadius,
+  kc,
+]);
+ useWeatherAggregator({
   province,
   district,
   selectedDay,
@@ -264,8 +269,7 @@ export default function WeatherApp() {
   etc,
   waterNetPerTree,
   vpd,
-]);
-
+});
 
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
@@ -375,7 +379,6 @@ export default function WeatherApp() {
 
                 <tbody>
                   {hourlyData.map((hour) => {
-                    console.log(hour); // <==== ใส่ตรงนี้
                     const temp = hour.temp;
                     const humidity = hour.humidity;
                     const wind = hour.windspeed || 2;
