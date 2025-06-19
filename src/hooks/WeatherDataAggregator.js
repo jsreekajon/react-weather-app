@@ -1,11 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { db } from "../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
 
 export default function useWeatherAggregator({
   province,
   district,
-  selectedDay,
   canopyRadius,
   kc,
   totalDailyETo,
@@ -13,77 +12,110 @@ export default function useWeatherAggregator({
   etc,
   waterNetPerTree,
   vpd,
+  selectedDay, // 👈 เพิ่มเข้ามา
 }) {
+  const dataBuffer = useRef([]);
+  const hasLoggedInitialInfo = useRef(false); // เพื่อป้องกันบันทึกซ้ำตอน mount
+
+  // ✅ 1. เก็บข้อมูลทันทีเมื่อเข้าเว็บ หรือมีการเปลี่ยนจังหวัด/อำเภอ/วัน
   useEffect(() => {
-    const interval = setInterval(async () => {
+    if (
+      province?.value &&
+      district?.value &&
+      selectedDay &&
+      kc?.value !== undefined &&
+      typeof canopyRadius === "number"
+    ) {
+      const trackingDoc = {
+        province: province.value,
+        district: district.value,
+        canopyRadius: parseFloat(canopyRadius),
+        kc: parseFloat(kc.value),
+        selectedDay: new Date(selectedDay),
+        timestamp: Timestamp.now(),
+      };
+
+      if (!hasLoggedInitialInfo.current) {
+        hasLoggedInitialInfo.current = true;
+        console.log("🚩 บันทึกครั้งแรกหรือค่าที่เปลี่ยน:", trackingDoc);
+        addDoc(collection(db, "location_tracking"), trackingDoc).catch((err) =>
+          console.error("❌ บันทึก location_tracking ล้มเหลว:", err)
+        );
+      }
+    }
+  }, [province, district, selectedDay, canopyRadius, kc]);
+
+  // ✅ 2. เก็บข้อมูลทุก 15 วิ
+  useEffect(() => {
+    const collectInterval = setInterval(() => {
       if (
-        vpd !== null &&
         province?.value &&
         district?.value &&
-        selectedDay &&
-        typeof canopyRadius === "number" &&
         kc?.value !== undefined &&
+        typeof canopyRadius === "number" &&
         totalDailyETo !== null &&
         rainfall !== null &&
         etc !== null &&
-        !isNaN(parseFloat(etc)) &&
-        waterNetPerTree !== null
+        waterNetPerTree !== null &&
+        vpd !== null
       ) {
-        const locationKey = `${province.value}_${district.value}`;
-        const metaDocRef = doc(db, "locations_meta", "active_areas");
-
-        const locationDoc = {
+        dataBuffer.current.push({
           province: province.value,
           district: district.value,
-          canopyRadius: parseFloat(canopyRadius),
           kc: parseFloat(kc.value),
           totalDailyETo: parseFloat(totalDailyETo),
           rainfall: parseFloat(rainfall),
-          etc: parseFloat(etc.toFixed(3)),
+          etc: parseFloat(etc),
           waterNetPerTree: parseFloat(waterNetPerTree),
-          selectedDay: new Date(selectedDay),
+          vpd: parseFloat(vpd),
           timestamp: new Date(),
-        };
+        });
 
-        try {
-          const snapshot = await getDoc(metaDocRef);
-
-          if (snapshot.exists()) {
-            const existingData = snapshot.data();
-            const currentKeys = existingData.locationKeys || [];
-            const currentDetails = existingData.locationDetails || [];
-
-            // เพิ่ม locationKey ถ้ายังไม่มี
-            const newKeys = currentKeys.includes(locationKey)
-              ? currentKeys
-              : [...currentKeys, locationKey];
-
-            // เพิ่ม locationDoc เข้า array ทุกครั้ง
-            const newDetails = [...currentDetails, locationDoc];
-
-            await setDoc(metaDocRef, {
-              locationKeys: newKeys,
-              locationDetails: newDetails,
-            });
-          } else {
-            await setDoc(metaDocRef, {
-              locationKeys: [locationKey],
-              locationDetails: [locationDoc],
-            });
-          }
-
-          console.log("✅ บันทึก locationDetails แล้ว");
-        } catch (err) {
-          console.error("❌ บันทึก locationDetails ล้มเหลว", err);
-        }
+        console.log("📥 บัฟเฟอร์ข้อมูลรวม:", dataBuffer.current.length);
       }
     }, 15 * 1000);
 
-    return () => clearInterval(interval);
+    // ✅ 3. สรุปและส่งทุก 1 นาที
+    const aggregateInterval = setInterval(async () => {
+      const values = dataBuffer.current;
+      if (values.length === 0) return;
+
+      const avg = (key) =>
+        values.reduce((sum, item) => sum + item[key], 0) / values.length;
+
+      const provinces = Array.from(new Set(values.map((v) => v.province)));
+
+      const now = new Date();
+
+      const combinedSummary = {
+        includedProvinces: provinces,
+        date: now.toISOString().split("T")[0],
+        etc: avg("etc"),
+        kc: avg("kc"),
+        rainfall: avg("rainfall"),
+        totalDailyETo: avg("totalDailyETo"),
+        vpd: avg("vpd"),
+        waterNetPerTree: avg("waterNetPerTree"),
+        timestamp: Timestamp.fromDate(now),
+      };
+
+      try {
+        await addDoc(collection(db, "weather_combined_summary"), combinedSummary);
+        console.log("✅ บันทึกข้อมูลรวมสำเร็จ:", combinedSummary);
+      } catch (err) {
+        console.error("❌ บันทึกข้อมูลรวมล้มเหลว:", err);
+      }
+
+      dataBuffer.current = [];
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(collectInterval);
+      clearInterval(aggregateInterval);
+    };
   }, [
     province,
     district,
-    selectedDay,
     canopyRadius,
     kc,
     totalDailyETo,

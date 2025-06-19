@@ -13,7 +13,8 @@ import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import { kcOptions } from "../data/kcOptions";
 import useWeatherAggregator from "../hooks/WeatherDataAggregator"; 
-const API_KEY = "D2HBXFV5VCMLAV8U4C32EUUNK";
+
+const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
 const googleMarkerIcon = new L.Icon({
   iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
