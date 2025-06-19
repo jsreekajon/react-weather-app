@@ -33,7 +33,7 @@ function FlyToLocation({ coordinates }) {
   return null;
 }
 
-export default function WeatherApp() {
+export default function WeatherApp({ user }) {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
@@ -260,6 +260,7 @@ export default function WeatherApp() {
   kc,
 ]);
  useWeatherAggregator({
+  user,
   province,
   district,
   selectedDay,

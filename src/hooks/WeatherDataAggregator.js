@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { db } from "../firebase";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, Timestamp } from "firebase/firestore";
 
 export default function useWeatherAggregator({
+  user, // 👈 เพิ่มตรงนี้
   province,
   district,
   canopyRadius,
@@ -12,42 +13,51 @@ export default function useWeatherAggregator({
   etc,
   waterNetPerTree,
   vpd,
-  selectedDay, // 👈 เพิ่มเข้ามา
+  selectedDay,
 }) {
   const dataBuffer = useRef([]);
-  const hasLoggedInitialInfo = useRef(false); // เพื่อป้องกันบันทึกซ้ำตอน mount
+  const latestParams = useRef({});
 
-  // ✅ 1. เก็บข้อมูลทันทีเมื่อเข้าเว็บ หรือมีการเปลี่ยนจังหวัด/อำเภอ/วัน
+  // 🔁 อัปเดตค่าพารามิเตอร์ล่าสุดใน useRef
   useEffect(() => {
-    if (
-      province?.value &&
-      district?.value &&
-      selectedDay &&
-      kc?.value !== undefined &&
-      typeof canopyRadius === "number"
-    ) {
-      const trackingDoc = {
-        province: province.value,
-        district: district.value,
-        canopyRadius: parseFloat(canopyRadius),
-        kc: parseFloat(kc.value),
-        selectedDay: new Date(selectedDay),
-        timestamp: Timestamp.now(),
-      };
+    latestParams.current = {
+      province,
+      district,
+      canopyRadius,
+      kc,
+      totalDailyETo,
+      rainfall,
+      etc,
+      waterNetPerTree,
+      vpd,
+    };
+  }, [
+    province,
+    district,
+    canopyRadius,
+    kc,
+    totalDailyETo,
+    rainfall,
+    etc,
+    waterNetPerTree,
+    vpd,
+  ]);
 
-      if (!hasLoggedInitialInfo.current) {
-        hasLoggedInitialInfo.current = true;
-        console.log("🚩 บันทึกครั้งแรกหรือค่าที่เปลี่ยน:", trackingDoc);
-        addDoc(collection(db, "location_tracking"), trackingDoc).catch((err) =>
-          console.error("❌ บันทึก location_tracking ล้มเหลว:", err)
-        );
-      }
-    }
-  }, [province, district, selectedDay, canopyRadius, kc]);
-
-  // ✅ 2. เก็บข้อมูลทุก 15 วิ
+  // ✅ 2. ตั้ง interval ครั้งเดียวตอน mount เท่านั้น
   useEffect(() => {
     const collectInterval = setInterval(() => {
+      const {
+        province,
+        district,
+        kc,
+        totalDailyETo,
+        rainfall,
+        etc,
+        waterNetPerTree,
+        vpd,
+        canopyRadius,
+      } = latestParams.current;
+
       if (
         province?.value &&
         district?.value &&
@@ -73,9 +83,8 @@ export default function useWeatherAggregator({
 
         console.log("📥 บัฟเฟอร์ข้อมูลรวม:", dataBuffer.current.length);
       }
-    }, 15 * 1000);
+    }, 1 * 1000);
 
-    // ✅ 3. สรุปและส่งทุก 1 นาที
     const aggregateInterval = setInterval(async () => {
       const values = dataBuffer.current;
       if (values.length === 0) return;
@@ -100,7 +109,16 @@ export default function useWeatherAggregator({
       };
 
       try {
-        await addDoc(collection(db, "weather_combined_summary"), combinedSummary);
+        if (user?.email) {
+          const docRef = doc(
+            db,
+            "weather_combined_summary",
+            `${user.email}_${now.toISOString().split("T")[0]}`
+          );
+          await setDoc(docRef, combinedSummary);
+          console.log("✅ บันทึกข้อมูลของ:", user.email);
+        }
+
         console.log("✅ บันทึกข้อมูลรวมสำเร็จ:", combinedSummary);
       } catch (err) {
         console.error("❌ บันทึกข้อมูลรวมล้มเหลว:", err);
@@ -113,15 +131,5 @@ export default function useWeatherAggregator({
       clearInterval(collectInterval);
       clearInterval(aggregateInterval);
     };
-  }, [
-    province,
-    district,
-    canopyRadius,
-    kc,
-    totalDailyETo,
-    rainfall,
-    etc,
-    waterNetPerTree,
-    vpd,
-  ]);
+  }, []); // 👈 สำคัญมาก! ไม่มี dependency เพื่อให้รันครั้งเดียว
 }
