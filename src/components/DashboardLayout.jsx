@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import {
   getAuth,
@@ -11,14 +11,29 @@ import { app } from "../firebase";
 
 export default function DashboardLayout({ children }) {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const auth = getAuth(app);
+
+  const dropdownRef = useRef();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, [auth]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -35,11 +50,14 @@ export default function DashboardLayout({ children }) {
     try {
       await signOut(auth);
       setUser(null);
+      setDropdownOpen(false);
       console.log("🚪 ออกจากระบบแล้ว");
     } catch (error) {
       console.error("❌ ออกจากระบบล้มเหลว:", error);
     }
   };
+
+  if (loading) return <div className="text-center p-5">Loading...</div>;
 
   return (
     <div>
@@ -49,30 +67,41 @@ export default function DashboardLayout({ children }) {
           Weather Forecast
         </a>
 
-        {/* Login/Profile Icon Button */}
         {user ? (
-          <div className="dropdown">
+          <div className="position-relative" ref={dropdownRef}>
             <button
-              className="btn btn-outline-light dropdown-toggle d-flex align-items-center"
-              id="userDropdown"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
+              className="btn btn-outline-light d-flex align-items-center"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
             >
               <img
                 src={user.photoURL || "/images/avatar.png"}
-                alt="profile"
-                className="rounded-circle"
-                style={{ width: "28px", height: "28px", marginRight: "8px" }}
+                alt="profile icon"
+                className="rounded-circle border border-white"
+                style={{ width: "32px", height: "32px", marginRight: "8px" }}
               />
               {user.displayName || "User"}
             </button>
-            <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-              <li>
-                <button className="dropdown-item" onClick={handleLogout}>
-                  Logout
-                </button>
-              </li>
-            </ul>
+
+            {dropdownOpen && (
+              <ul
+                className="dropdown-menu dropdown-menu-end show position-absolute mt-2"
+                style={{ right: 0 }}
+              >
+                <li>
+                  <span className="dropdown-item-text text-muted small">
+                    {user.email}
+                  </span>
+                </li>
+                <li>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <button className="dropdown-item" onClick={handleLogout}>
+                    Logout
+                  </button>
+                </li>
+              </ul>
+            )}
           </div>
         ) : (
           <button
@@ -81,15 +110,15 @@ export default function DashboardLayout({ children }) {
           >
             <img
               src="/images/avatar.png"
-              alt="login"
-              style={{ width: "20px", marginRight: "6px" }}
+              alt="login icon"
+              style={{ width: "24px", marginRight: "6px" }}
             />
             Login
           </button>
         )}
       </nav>
 
-      {/* Layout with Sidebar + Main */}
+      {/* Layout */}
       <div className="container-fluid">
         <div className="row">
           {/* Sidebar */}
@@ -106,7 +135,6 @@ export default function DashboardLayout({ children }) {
                     Home
                   </a>
                 </li>
-
                 <li className="nav-item">
                   <a className="nav-link active" href="/dashboard">
                     <img
@@ -117,7 +145,6 @@ export default function DashboardLayout({ children }) {
                     Dashboard
                   </a>
                 </li>
-
                 <li className="nav-item">
                   <a className="nav-link" href="/data">
                     <img
@@ -132,7 +159,7 @@ export default function DashboardLayout({ children }) {
             </div>
           </nav>
 
-          {/* Main Content Area */}
+          {/* Main content */}
           <main className="col-md-10 ml-sm-auto px-4 py-4">{children}</main>
         </div>
       </div>

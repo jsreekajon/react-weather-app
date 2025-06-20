@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { db } from "../firebase";
-import { doc, setDoc, collection, addDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 
 export default function useWeatherAggregator({
-  user, // 👈 เพิ่มตรงนี้
+  user,
   province,
   district,
   canopyRadius,
@@ -13,12 +13,17 @@ export default function useWeatherAggregator({
   etc,
   waterNetPerTree,
   vpd,
-  selectedDay,
 }) {
   const dataBuffer = useRef([]);
   const latestParams = useRef({});
 
-  // 🔁 อัปเดตค่าพารามิเตอร์ล่าสุดใน useRef
+  const joinUniqueList = (arr) =>
+    [...new Set(
+      arr
+        .map((e) => e.trim())
+        .filter((e) => e !== "" && e !== "จังหวัด" && e !== "อำเภอ")
+    )];
+
   useEffect(() => {
     latestParams.current = {
       province,
@@ -43,7 +48,6 @@ export default function useWeatherAggregator({
     vpd,
   ]);
 
-  // ✅ 2. ตั้ง interval ครั้งเดียวตอน mount เท่านั้น
   useEffect(() => {
     const collectInterval = setInterval(() => {
       const {
@@ -80,56 +84,129 @@ export default function useWeatherAggregator({
           vpd: parseFloat(vpd),
           timestamp: new Date(),
         });
-
         console.log("📥 บัฟเฟอร์ข้อมูลรวม:", dataBuffer.current.length);
       }
-    }, 1 * 1000);
+    }, 1000);
 
     const aggregateInterval = setInterval(async () => {
       const values = dataBuffer.current;
       if (values.length === 0) return;
 
-      const avg = (key) =>
-        values.reduce((sum, item) => sum + item[key], 0) / values.length;
-
-      const provinces = Array.from(new Set(values.map((v) => v.province)));
-
       const now = new Date();
-
-      const combinedSummary = {
-        includedProvinces: provinces,
-        date: now.toISOString().split("T")[0],
-        etc: avg("etc"),
-        kc: avg("kc"),
-        rainfall: avg("rainfall"),
-        totalDailyETo: avg("totalDailyETo"),
-        vpd: avg("vpd"),
-        waterNetPerTree: avg("waterNetPerTree"),
-        timestamp: Timestamp.fromDate(now),
-      };
+      const today = now.toISOString().split("T")[0];
+      const docId = user?.uid || `anon_${now.getTime()}`;
+      const docRef = doc(db, "weather_combined_summary", docId);
 
       try {
-        if (user?.email) {
-          const docRef = doc(
-            db,
-            "weather_combined_summary",
-            `${user.email}_${now.toISOString().split("T")[0]}`
-          );
-          await setDoc(docRef, combinedSummary);
-          console.log("✅ บันทึกข้อมูลของ:", user.email);
+        const provinceVal = province?.value;
+        const districtVal = district?.value;
+
+        if (!provinceVal || !districtVal) {
+          console.warn("⛔️ จังหวัดหรืออำเภอไม่ถูกต้อง");
+          dataBuffer.current = [];
+          return;
         }
 
-        console.log("✅ บันทึกข้อมูลรวมสำเร็จ:", combinedSummary);
+        const docSnap = await getDoc(docRef);
+        let existingEntries = docSnap.exists() ? docSnap.data().entries || [] : [];
+
+        const avg = (key) =>
+          parseFloat(
+            (
+              values.reduce((sum, item) => sum + item[key], 0) / values.length
+            ).toFixed(2)
+          );
+
+        const entryIndex = existingEntries.findIndex((e) => e.date === today);
+
+        if (entryIndex !== -1) {
+          let existingEntry = existingEntries[entryIndex];
+
+          const provList = existingEntry.province || [];
+          const distList = existingEntry.district || [];
+
+          const newProvList = joinUniqueList([...provList, provinceVal]);
+          const newDistList = joinUniqueList([...distList, districtVal]);
+
+          const isProvinceAdded = !provList.includes(provinceVal);
+          const isDistrictAdded = !distList.includes(districtVal);
+
+          if (isProvinceAdded || isDistrictAdded) {
+            existingEntries[entryIndex] = {
+              ...existingEntry,
+              province: newProvList,
+              district: newDistList,
+              etc: avg("etc"),
+              kc: avg("kc"),
+              rainfall: avg("rainfall"),
+              totalDailyETo: avg("totalDailyETo"),
+              vpd: avg("vpd"),
+              waterNetPerTree: avg("waterNetPerTree"),
+              timestamp: Timestamp.fromDate(now),
+            };
+            console.log("✅ อัปเดตข้อมูลจังหวัด/อำเภอใหม่ใน entry เดิม:", existingEntries[entryIndex]);
+          } else {
+            console.log("⏩ ข้าม: จังหวัด/อำเภอนี้ถูกบันทึกไปแล้วในวันนี้");
+          }
+        } else {
+          const newEntry = {
+            date: today,
+            province: [provinceVal],
+            district: [districtVal],
+            etc: avg("etc"),
+            kc: avg("kc"),
+            rainfall: avg("rainfall"),
+            totalDailyETo: avg("totalDailyETo"),
+            vpd: avg("vpd"),
+            waterNetPerTree: avg("waterNetPerTree"),
+            timestamp: Timestamp.fromDate(now),
+          };
+
+          existingEntries.push(newEntry);
+          console.log("✅ เพิ่ม entry ใหม่:", newEntry);
+        }
+
+        const summaryAvg = {
+          avgEtc: parseFloat(
+            (existingEntries.reduce((sum, e) => sum + e.etc, 0) / existingEntries.length).toFixed(2)
+          ),
+          avgKc: parseFloat(
+            (existingEntries.reduce((sum, e) => sum + e.kc, 0) / existingEntries.length).toFixed(2)
+          ),
+          avgRainfall: parseFloat(
+            (existingEntries.reduce((sum, e) => sum + e.rainfall, 0) / existingEntries.length).toFixed(2)
+          ),
+          avgTotalDailyETo: parseFloat(
+            (existingEntries.reduce((sum, e) => sum + e.totalDailyETo, 0) / existingEntries.length).toFixed(2)
+          ),
+          avgVpd: parseFloat(
+            (existingEntries.reduce((sum, e) => sum + e.vpd, 0) / existingEntries.length).toFixed(2)
+          ),
+          avgWaterNetPerTree: parseFloat(
+            (existingEntries.reduce((sum, e) => sum + e.waterNetPerTree, 0) / existingEntries.length).toFixed(2)
+          ),
+        };
+
+        await setDoc(
+          docRef,
+          {
+            entries: existingEntries,
+            summaryAvg,
+          },
+          { merge: true }
+        );
+
+        console.log("✅ บันทึกสำเร็จ");
       } catch (err) {
-        console.error("❌ บันทึกข้อมูลรวมล้มเหลว:", err);
+        console.error("❌ เกิดข้อผิดพลาดในการบันทึก:", err);
       }
 
       dataBuffer.current = [];
-    }, 60 * 1000);
+    }, 60000);
 
     return () => {
       clearInterval(collectInterval);
       clearInterval(aggregateInterval);
     };
-  }, []); // 👈 สำคัญมาก! ไม่มี dependency เพื่อให้รันครั้งเดียว
+  }, [user?.uid, province?.value, district?.value]);
 }
