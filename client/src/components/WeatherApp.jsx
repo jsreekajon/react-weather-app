@@ -1,10 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Select from "react-select";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-
-// เพิ่มเข้าไปบนสุดของไฟล์ WeatherApp.jsx
 import { db } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
 import provinces from "../data/provinces";
@@ -12,33 +7,24 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import { kcOptions } from "../data/kcOptions";
-import useWeatherAggregator from "../hooks/WeatherDataAggregator"; 
+import useWeatherAggregator from "../hooks/WeatherDataAggregator";
+import WeatherMap from "./map"; // ✅ // ← เพิ่มการ import ใหม่
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
-const googleMarkerIcon = new L.Icon({
-  iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
-
-function FlyToLocation({ coordinates }) {
-  const map = useMap();
-  useEffect(() => {
-    if (coordinates) {
-      map.flyTo(coordinates, 10, { animate: true, duration: 1.5 });
-    }
-  }, [coordinates, map]);
-  return null;
-}
-
+// ↓ เหลือแค่ component เดียว: WeatherApp
 export default function WeatherApp({ user }) {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
-  const [province, setProvince] = useState({ label: defaultProvince, value: defaultProvince });
-  const [district, setDistrict] = useState({ label: defaultDistrict, value: defaultDistrict });
+  const [province, setProvince] = useState({
+    label: defaultProvince,
+    value: defaultProvince,
+  });
+  const [district, setDistrict] = useState({
+    label: defaultDistrict,
+    value: defaultDistrict,
+  });
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -51,7 +37,7 @@ export default function WeatherApp({ user }) {
   const [kc, setKc] = useState(kcOptions[0]);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
-    
+
   useEffect(() => {
     const firstDistrict = provinces[province.value]?.[0];
     if (firstDistrict)
@@ -138,9 +124,15 @@ export default function WeatherApp({ user }) {
   const districtOptions =
     provinces[province.value]?.map((dist) => ({ label: dist, value: dist })) ||
     [];
+
+  const formatDateThai = (isoDate) => {
+    const [y, m, d] = isoDate.split("-");
+    return `${d}-${m}-${y}`;
+  };
+
   const dayOptions =
     weather?.days.map((day) => ({
-      label: day.datetime,
+      label: formatDateThai(day.datetime),
       value: day.datetime,
     })) || [];
 
@@ -187,17 +179,15 @@ export default function WeatherApp({ user }) {
     return !isNaN(r) ? Math.PI * r * r : null;
   }, [canopyRadius]);
 
-  // ปริมาณน้ำฝนรายวัน (mm)
   const rainfall = useMemo(() => {
     const rain = weather?.days.find((d) => d.datetime === selectedDay)?.precip;
     return rain !== undefined ? parseFloat(rain.toFixed(2)) : null;
   }, [weather, selectedDay]);
 
-  // ปริมาณน้ำที่ต้องการสุทธิ = พื้นที่ × (tcetcTc - น้ำฝน)
   const waterNetPerTree = useMemo(() => {
     if (canopyAreaSqM !== null && etc !== null && rainfall !== null) {
       const netETc = etc - rainfall;
-      const netWater = Math.max(0, canopyAreaSqM * netETc); // ตัดค่าติดลบเป็น 0
+      const netWater = Math.max(0, canopyAreaSqM * netETc);
       return netWater.toFixed(2);
     }
     return null;
@@ -209,104 +199,86 @@ export default function WeatherApp({ user }) {
     return parseFloat((svp - avp).toFixed(3));
   };
 
-
   useEffect(() => {
-  const interval = setInterval(() => {
-    if (
-      vpd !== null &&
-      province &&
-      district &&
-      selectedDay &&
-      totalDailyETo !== null &&
-      rainfall !== null &&
-      etc !== null &&
-      waterNetPerTree !== null
-    ) {
-      const saveRawData = async () => {
-        try {
-          await addDoc(collection(db, "weather_minute_summary"), {
-            province: province.value,
-            district: district.value,
-            canopyRadius: parseFloat(canopyRadius),
-            kc: kc.value,
-            date: new Date(selectedDay),
-            timestamp: new Date(),
-            totalDailyETo: parseFloat(totalDailyETo),
-            rainfall: parseFloat(rainfall),
-            etc: parseFloat(etc.toFixed(3)),
-            waterNetPerTree: parseFloat(waterNetPerTree),
-            vpd,
-          });
-          console.log("✅ บันทึกข้อมูลดิบเรียบร้อย (15 นาที)");
-        } catch (e) {
-          console.error("❌ บันทึกข้อมูลดิบล้มเหลว:", e);
-        }
-      };
-      saveRawData();
-    }
-  }, 10 * 60 * 1000); // 10 นาที
+    const interval = setInterval(() => {
+      if (
+        vpd !== null &&
+        province &&
+        district &&
+        selectedDay &&
+        totalDailyETo !== null &&
+        rainfall !== null &&
+        etc !== null &&
+        waterNetPerTree !== null
+      ) {
+        const saveRawData = async () => {
+          try {
+            await addDoc(collection(db, "weather_minute_summary"), {
+              province: province.value,
+              district: district.value,
+              canopyRadius: parseFloat(canopyRadius),
+              kc: kc.value,
+              date: new Date(selectedDay),
+              timestamp: new Date(),
+              totalDailyETo: parseFloat(totalDailyETo),
+              rainfall: parseFloat(rainfall),
+              etc: parseFloat(etc.toFixed(3)),
+              waterNetPerTree: parseFloat(waterNetPerTree),
+              vpd,
+            });
+            console.log("✅ บันทึกข้อมูลดิบเรียบร้อย (10 นาที)");
+          } catch (e) {
+            console.error("❌ บันทึกข้อมูลดิบล้มเหลว:", e);
+          }
+        };
+        saveRawData();
+      }
+    }, 10 * 60 * 1000);
 
-  return () => clearInterval(interval);
-}, [
-  province,
-  district,
-  selectedDay,
-  totalDailyETo,
-  rainfall,
-  etc,
-  waterNetPerTree,
-  vpd,
-  canopyRadius,
-  kc,
-]);
- useWeatherAggregator({
-  user,
-  province,
-  district,
-  selectedDay,
-  canopyRadius,
-  kc,
-  totalDailyETo,
-  rainfall,
-  etc,
-  waterNetPerTree,
-  vpd,
-});
+    return () => clearInterval(interval);
+  }, [
+    province,
+    district,
+    selectedDay,
+    totalDailyETo,
+    rainfall,
+    etc,
+    waterNetPerTree,
+    vpd,
+    canopyRadius,
+    kc,
+  ]);
+
+  useWeatherAggregator({
+    user,
+    province,
+    district,
+    selectedDay,
+    canopyRadius,
+    kc,
+    totalDailyETo,
+    rainfall,
+    etc,
+    waterNetPerTree,
+    vpd,
+  });
 
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
       <h2>พยากรณ์อากาศ</h2>
       <div className="row">
         <div className="col-6">
-          <MapContainer
-            center={[13.736717, 100.523186]}
-            zoom={10}
-            style={{ height: 300, width: "100%", marginBottom: 20 }}
-          >
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <FlyToLocation coordinates={mapCenter} />
-            {mapCenter && weather && selectedDay && (
-              <Marker position={mapCenter} icon={googleMarkerIcon}>
-                <Popup>
-                  <div>
-                    <p>วันที่: {selectedDay}</p>
-                    <p>อุณหภูมิเฉลี่ย: {t} °C</p>
-                    <p>ความชื้นสัมพัทธ์เฉลี่ย: {h} %</p>
-                    <p>
-                      การแผ่รังสีแสงอาทิตย์เฉลี่ย:{" "}
-                      {l !== undefined
-                        ? ((l * 86400) / 1e6).toFixed(2)
-                        : "ไม่ระบุ"}{" "}
-                      MJ/m²/day
-                    </p>
-                    <p>
-                      VPD (รายวัน): {vpd !== null ? `${vpd} kPa` : "ไม่ระบุ"}
-                    </p>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
+          <WeatherMap
+            province={province}
+            district={district}
+            mapCenter={mapCenter}
+            weather={weather}
+            selectedDay={selectedDay}
+            t={t}
+            h={h}
+            l={l}
+            vpd={vpd}
+          />
 
           <label>จังหวัด:</label>
           <Select
@@ -315,6 +287,7 @@ export default function WeatherApp({ user }) {
             onChange={setProvince}
             isSearchable
           />
+
           <label>อำเภอ:</label>
           <Select
             options={districtOptions}
@@ -322,6 +295,7 @@ export default function WeatherApp({ user }) {
             onChange={setDistrict}
             isSearchable
           />
+
           <label>รัศมีทรงพุ่ม (เมตร):</label>
           <input
             type="number"
@@ -331,6 +305,7 @@ export default function WeatherApp({ user }) {
             min="0"
             step="1"
           />
+
           <label>Kc (ระยะพัฒนาการ):</label>
           <Select
             options={kcOptions}
@@ -338,6 +313,7 @@ export default function WeatherApp({ user }) {
             onChange={setKc}
             isSearchable={false}
           />
+
           {weather && (
             <>
               <label>เลือกวันที่:</label>
@@ -348,6 +324,7 @@ export default function WeatherApp({ user }) {
               />
             </>
           )}
+
           {loading && <p>กำลังโหลดข้อมูล...</p>}
           {error && <p style={{ color: "red" }}>{error}</p>}
         </div>
@@ -378,7 +355,6 @@ export default function WeatherApp({ user }) {
                     <th>ETo (mm/hr)</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {hourlyData.map((hour) => {
                     const temp = hour.temp;
@@ -426,7 +402,6 @@ export default function WeatherApp({ user }) {
                         <td>
                           {wind !== undefined ? wind.toFixed(1) : "ไม่ระบุ"}
                         </td>
-
                         <td>
                           {temp !== undefined && humidity !== undefined
                             ? calcVPD(temp, humidity)
@@ -442,6 +417,7 @@ export default function WeatherApp({ user }) {
                   })}
                 </tbody>
               </table>
+
               <div style={{ marginTop: 10, fontWeight: "bold" }}>
                 รวม ETo รายวัน: {totalDailyETo} mm
               </div>
