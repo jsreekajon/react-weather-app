@@ -6,7 +6,8 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import { db } from "../firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
@@ -108,28 +109,47 @@ export default function HomePage() {
   ];
 
   const handleSave = async () => {
-    if (isFormComplete && user?.email) {
+    if (isFormComplete) {
       try {
-        const docRef = doc(db, "user_weather_inputs", user.email); // ใช้ email เป็นชื่อ document
-        await setDoc(docRef, {
-          temp: parseFloat(myTemp),
-          humidity: parseFloat(myHumidity),
-          solar: parseFloat(mySolar),
-          wind: parseFloat(myWind),
-          province: province.value,
-          district: district.value,
-          date: new Date(selectedDay),
-          timestamp: Timestamp.now(),
-          email: user.email, // เก็บไว้ในข้อมูลด้วย
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) throw new Error("User not logged in");
+
+        const token = await user.getIdToken(); // ⬅️ ได้ token
+
+        const res = await fetch("http://localhost:3001/api/weather-input", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`, // ⬅️ ส่ง token ไปให้ backend
+          },
+          body: JSON.stringify({
+            temp: parseFloat(myTemp),
+            humidity: parseFloat(myHumidity),
+            solar: parseFloat(mySolar),
+            wind: parseFloat(myWind),
+            province: province.value,
+            district: district.value,
+            date: selectedDay,
+          }),
         });
-        setSaveMessage("✅ บันทึกข้อมูลโดยใช้อีเมลเป็นชื่อเอกสารแล้ว");
-        setMyTemp("");
-        setMyHumidity("");
-        setMySolar("");
-        setMyWind("");
+
+        let result;
+        try {
+          result = await res.json();
+        } catch (e) {
+          console.warn("⚠️ ไม่สามารถแปลง response เป็น JSON:", e);
+          result = { error: "Invalid response from server" };
+        }
+
+        if (res.ok) {
+          setSaveMessage("✅ ส่งข้อมูลสำเร็จ");
+        } else {
+          throw new Error(result.error || "Unknown error");
+        }
       } catch (error) {
-        console.error("❌ เกิดข้อผิดพลาดในการบันทึก:", error);
-        setSaveMessage("❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+        console.error("❌ error:", error);
+        setSaveMessage("❌ เกิดข้อผิดพลาดขณะส่งข้อมูล");
       }
     }
   };
