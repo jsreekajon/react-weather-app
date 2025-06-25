@@ -1,28 +1,29 @@
-// server/index.js
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
 const path = require("path");
 const fs = require("fs");
+const axios = require("axios");
+const mqtt = require("mqtt");
 
 const app = express();
 const port = 3001;
 
-// โหลด Firebase service account key
+// 🔐 โหลด Firebase service account key
 const serviceAccount = require("./serviceAccountKey.json");
 
-// เริ่ม Firebase Admin SDK
+// 🔐 เริ่ม Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 const db = admin.firestore();
 
-// Utility: แปลง email ให้ปลอดภัยเป็นชื่อ doc
+// 🔧 แปลง email ให้ปลอดภัยเป็นชื่อ doc
 function safeEmailId(email) {
   return email.replace(/[@.]/g, "_");
 }
 
-// Middleware
+// 🌐 Middleware
 app.use(cors());
 app.use(express.json());
 app.use((req, res, next) => {
@@ -33,7 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Auth Middleware
+// 🔐 Auth Middleware
 async function verifyToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization || "";
@@ -56,7 +57,9 @@ async function verifyToken(req, res, next) {
 
 // ✅ API Routes
 app.get("/api/profile", verifyToken, async (req, res) => {
+  console.log("🔐 User profile request:", req.user);
   res.json({ uid: req.user.uid, email: req.user.email });
+  
 });
 
 app.get("/api/profile/data", verifyToken, async (req, res) => {
@@ -83,6 +86,21 @@ app.post("/api/profile", verifyToken, async (req, res) => {
   }
 });
 
+app.post("/api/weather-result", async (req, res) => {
+  try {
+    const data = req.body;
+    console.log("📥 ข้อมูลจาก Node-RED:", data);
+    await db.collection("weather_results").add({
+      ...data,
+      timestamp: admin.firestore.Timestamp.now(),
+    });
+    res.json({ message: "Saved from Node-RED" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error saving data" });
+  }
+});
+
 app.post("/api/weather-input", verifyToken, async (req, res) => {
   try {
     const { temp, humidity, solar, wind, province, district, date } = req.body;
@@ -103,10 +121,9 @@ app.post("/api/weather-input", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Missing or invalid fields" });
     }
 
-    // สร้างชื่อ doc ใหม่เป็น email+timestamp เพื่อไม่ให้ซ้ำ และยังรู้ว่าเป็นของใคร
     const docId = `${safeEmailId(email)}_${Date.now()}`;
 
-    await db.collection("user_weather_inputs").doc(docId).set({
+    const weatherData = {
       userEmail: email,
       temp: parseFloat(temp),
       humidity: parseFloat(humidity),
@@ -115,8 +132,25 @@ app.post("/api/weather-input", verifyToken, async (req, res) => {
       province,
       district,
       date,
-      timestamp: admin.firestore.Timestamp.now(),
+      timestamp: new Date().toISOString(),
+    };
+
+    // 1. บันทึกใน Firestore
+    await db.collection("user_weather_inputs").doc(docId).set({
+      ...weatherData,
+      timestamp: admin.firestore.Timestamp.now(), // สำหรับ Firestore
     });
+
+    // 2. ส่งข้อมูลไปยัง Node-RED ผ่าน HTTP
+    try {
+      const nodeRedResponse = await axios.post(
+        "http://localhost:1880/weather-data", // URL Node-RED
+        weatherData
+      );
+      console.log("📤 ส่งไปยัง Node-RED สำเร็จ:", nodeRedResponse.status);
+    } catch (error) {
+      console.error("⚠️ ไม่สามารถส่งไปยัง Node-RED:", error.message);
+    }
 
     res.json({ message: "ข้อมูลใหม่ถูกบันทึกเรียบร้อยแล้ว" });
   } catch (error) {
@@ -125,7 +159,7 @@ app.post("/api/weather-input", verifyToken, async (req, res) => {
   }
 });
 
-// ✅ Serve React (from CRA build)
+// ✅ Serve React (CRA build)
 const buildPath = path.join(__dirname, "../build");
 if (fs.existsSync(buildPath)) {
   app.use(express.static(buildPath));
@@ -133,6 +167,37 @@ if (fs.existsSync(buildPath)) {
     res.sendFile(path.join(buildPath, "index.html"));
   });
 }
+
+// 📡 MQTT Setup
+const mqttClient = mqtt.connect("mqtt://localhost:1883");
+
+mqttClient.on("connect", () => {
+  console.log("🔗 Connected to MQTT Broker");
+
+  mqttClient.subscribe("weather/processed", (err) => {
+    if (err) {
+      console.error("❌ MQTT Subscribe error:", err);
+    } else {
+      console.log("📡 Subscribed to topic: weather/processed");
+    }
+  });
+});
+
+mqttClient.on("message", async (topic, message) => {
+  console.log(`📨 [MQTT] Topic: ${topic} | Message: ${message.toString()}`);
+  try {
+    const data = JSON.parse(message.toString());
+
+    await db.collection("weather_results").add({
+      ...data,
+      timestamp: admin.firestore.Timestamp.now(),
+    });
+
+    console.log("✅ ข้อมูลที่ส่งกลับจาก Node-RED ถูกบันทึกแล้ว");
+  } catch (error) {
+    console.error("❌ Error handling MQTT message:", error.message);
+  }
+});
 
 // 🚀 Start server
 app.listen(port, () => {
