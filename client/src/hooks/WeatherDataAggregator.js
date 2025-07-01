@@ -1,135 +1,35 @@
-import { useEffect, useRef } from "react";
-import { db } from "../firebase";
-import { doc, setDoc, collection, addDoc, Timestamp } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { getFirestore, collectionGroup, query, where, getDocs } from "firebase/firestore";
+import { app } from "../firebase";
 
-export default function useWeatherAggregator({
-  user, // 👈 เพิ่มตรงนี้
-  province,
-  district,
-  canopyRadius,
-  kc,
-  totalDailyETo,
-  rainfall,
-  etc,
-  waterNetPerTree,
-  vpd,
-  selectedDay,
-}) {
-  const dataBuffer = useRef([]);
-  const latestParams = useRef({});
+const db = getFirestore(app);
 
-  // 🔁 อัปเดตค่าพารามิเตอร์ล่าสุดใน useRef
+export default function useWeatherDataAggregator(user) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    latestParams.current = {
-      province,
-      district,
-      canopyRadius,
-      kc,
-      totalDailyETo,
-      rainfall,
-      etc,
-      waterNetPerTree,
-      vpd,
-    };
-  }, [
-    province,
-    district,
-    canopyRadius,
-    kc,
-    totalDailyETo,
-    rainfall,
-    etc,
-    waterNetPerTree,
-    vpd,
-  ]);
+    if (!user || !user.email) return;
 
-  // ✅ 2. ตั้ง interval ครั้งเดียวตอน mount เท่านั้น
-  useEffect(() => {
-    const collectInterval = setInterval(() => {
-      const {
-        province,
-        district,
-        kc,
-        totalDailyETo,
-        rainfall,
-        etc,
-        waterNetPerTree,
-        vpd,
-        canopyRadius,
-      } = latestParams.current;
-
-      if (
-        province?.value &&
-        district?.value &&
-        kc?.value !== undefined &&
-        typeof canopyRadius === "number" &&
-        totalDailyETo !== null &&
-        rainfall !== null &&
-        etc !== null &&
-        waterNetPerTree !== null &&
-        vpd !== null
-      ) {
-        dataBuffer.current.push({
-          province: province.value,
-          district: district.value,
-          kc: parseFloat(kc.value),
-          totalDailyETo: parseFloat(totalDailyETo),
-          rainfall: parseFloat(rainfall),
-          etc: parseFloat(etc),
-          waterNetPerTree: parseFloat(waterNetPerTree),
-          vpd: parseFloat(vpd),
-          timestamp: new Date(),
-        });
-
-        console.log("📥 บัฟเฟอร์ข้อมูลรวม:", dataBuffer.current.length);
-      }
-    }, 1 * 1000);
-
-    const aggregateInterval = setInterval(async () => {
-      const values = dataBuffer.current;
-      if (values.length === 0) return;
-
-      const avg = (key) =>
-        values.reduce((sum, item) => sum + item[key], 0) / values.length;
-
-      const provinces = Array.from(new Set(values.map((v) => v.province)));
-
-      const now = new Date();
-
-      const combinedSummary = {
-        includedProvinces: provinces,
-        date: now.toISOString().split("T")[0],
-        etc: avg("etc"),
-        kc: avg("kc"),
-        rainfall: avg("rainfall"),
-        totalDailyETo: avg("totalDailyETo"),
-        vpd: avg("vpd"),
-        waterNetPerTree: avg("waterNetPerTree"),
-        timestamp: Timestamp.fromDate(now),
-      };
-
+    const fetchData = async () => {
+      setLoading(true);
       try {
-        if (user?.email) {
-          const docId = `${user.email.replace(/[@.]/g, "_")}_${Date.now()}`;
-          const docRef = doc(db, "weather_combined_summary", docId);
-          await setDoc(docRef, {
-            ...combinedSummary,
-            userEmail: user.email,
-          });
-          console.log("✅ บันทึกข้อมูลของ:", user.email);
-        }
-
-        console.log("✅ บันทึกข้อมูลรวมสำเร็จ:", combinedSummary);
+        const q = query(
+          collectionGroup(db, "weather"),
+          where("user", "==", user.email)
+        );
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setData(docs);
       } catch (err) {
-        console.error("❌ บันทึกข้อมูลรวมล้มเหลว:", err);
+        console.error("เกิดข้อผิดพลาดในการดึงข้อมูล:", err);
+      } finally {
+        setLoading(false);
       }
-
-      dataBuffer.current = [];
-    }, 60 * 1000);
-
-    return () => {
-      clearInterval(collectInterval);
-      clearInterval(aggregateInterval);
     };
-  }, []); // 👈 สำคัญมาก! ไม่มี dependency เพื่อให้รันครั้งเดียว
+
+    fetchData();
+  }, [user.email]); // ✅ ใส่ dependency ให้ถูกต้อง
+
+  return { data, loading };
 }
