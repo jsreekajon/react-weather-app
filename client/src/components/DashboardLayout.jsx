@@ -7,11 +7,7 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import {
-  getFirestore,
-  doc,
-  setDoc,
-} from "firebase/firestore";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { app } from "../firebase";
 
 export default function DashboardLayout({ children }) {
@@ -113,10 +109,15 @@ export default function DashboardLayout({ children }) {
               >
                 <img
                   src={user.photoURL || "/images/default-avatar.png"}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/images/default-avatar.png";
+                  }}
                   alt="profile"
                   className="rounded-circle"
                   style={{ width: "28px", height: "28px", marginRight: "8px" }}
                 />
+
                 {user.displayName || "User"}
               </button>
 

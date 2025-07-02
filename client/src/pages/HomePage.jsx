@@ -29,7 +29,7 @@ export default function HomePage() {
       setWeatherData(data);
     } catch (err) {
       console.error("❌ Error:", err);
-      setErrorMsg("ไม่สามารถโหลดข้อมูลจาก Node-RED ได้");
+      setErrorMsg("ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้");
     } finally {
       setLoading(false);
     }
