@@ -69,9 +69,18 @@ export default function DashboardLayout({ children }) {
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
-      setUser(result.user);
-      await saveUserToFirestore(result.user);
-      console.log("✅ ลงทะเบียนสำเร็จ:", result.user);
+
+      // Reload user เพื่อดึงข้อมูลล่าสุด
+      await result.user.reload();
+      const refreshedUser = auth.currentUser;
+
+      // 🔍 Log ข้อมูลผู้ใช้
+      console.log("✅ ลงทะเบียนสำเร็จ:", refreshedUser);
+      console.log("👤 ชื่อผู้ใช้:", refreshedUser.displayName);
+      console.log("🖼️ รูปโปรไฟล์:", refreshedUser.photoURL);
+
+      setUser(refreshedUser);
+      await saveUserToFirestore(refreshedUser);
     } catch (error) {
       console.error("❌ ลงทะเบียนล้มเหลว:", error);
     }
@@ -108,17 +117,18 @@ export default function DashboardLayout({ children }) {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
               >
                 <img
-                  src={user.photoURL || "/images/default-avatar.png"}
+                  src={user?.photoURL || "/images/default-avatar.png"}
+                  alt="profile"
+                  referrerPolicy="no-referrer" // 🔥 เพิ่มบรรทัดนี้
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = "/images/default-avatar.png";
                   }}
-                  alt="profile"
                   className="rounded-circle"
                   style={{ width: "28px", height: "28px", marginRight: "8px" }}
                 />
 
-                {user.displayName || "User"}
+                {user?.displayName || "User"}
               </button>
 
               {dropdownOpen && (
