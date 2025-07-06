@@ -6,7 +6,7 @@ import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
-import { kcOptions } from "../data/kcOptions";
+import { kcOptionsByPlant } from "../data/kcOptions"; // อัปเดต import
 import useWeatherAggregator from "../hooks/WeatherDataAggregator";
 import WeatherMap from "./map"; // ✅ // ← เพิ่มการ import ใหม่
 
@@ -34,7 +34,8 @@ export default function WeatherApp({ user }) {
   const [l, setL] = useState(null);
   const [, setETo] = useState(null);
   const [canopyRadius, setCanopyRadius] = useState(1);
-  const [kc, setKc] = useState(kcOptions[0]);
+  const [plantType, setPlantType] = useState("ทุเรียน");
+  const [kc, setKc] = useState(kcOptionsByPlant[plantType]?.[0]);
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
@@ -43,6 +44,11 @@ export default function WeatherApp({ user }) {
     if (firstDistrict)
       setDistrict({ label: firstDistrict, value: firstDistrict });
   }, [province]);
+
+  useEffect(() => {
+    const defaultKc = kcOptionsByPlant[plantType]?.[0];
+    if (defaultKc) setKc(defaultKc);
+  }, [plantType]);
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -306,12 +312,21 @@ export default function WeatherApp({ user }) {
             step="1"
           />
 
-          <label>Kc (ระยะพัฒนาการ):</label>
+          <label>เลือกชนิดพืช:</label>
           <Select
-            options={kcOptions}
+            options={Object.keys(kcOptionsByPlant).map((key) => ({
+              label: key,
+              value: key,
+            }))}
+            value={{ label: plantType, value: plantType }}
+            onChange={(option) => setPlantType(option.value)}
+          />
+
+          <label>Kc (ระยะพัฒนาการของ {plantType}):</label>
+          <Select
+            options={kcOptionsByPlant[plantType]}
             value={kc}
             onChange={setKc}
-            isSearchable={false}
           />
 
           {weather && (
