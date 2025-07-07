@@ -1,70 +1,68 @@
-# Getting Started with Create React App
+# React Weather App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+แอปพลิเคชันพยากรณ์อากาศที่สร้างด้วย React  
+A simple weather forecast application built with React.
 
-## Available Scripts
+## คุณสมบัติ (Features)
 
-In the project directory, you can run:
+- แสดงข้อมูลสภาพอากาศปัจจุบันและรายวัน
+- แผนที่แสดงตำแหน่งจังหวัด
+- กราฟแสดงข้อมูลสภาพอากาศ
+- รองรับการเชื่อมต่อกับ Firebase
+- มีเวอร์ชันสำหรับมือถือ (WeatherAppMobile)
 
-### `npm start`
+## โครงสร้างโปรเจกต์ (Project Structure)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```
+react-weather-app/
+  ├── client/           # React frontend
+  ├── server/           # Node.js backend server
+  ├── functions/        # Firebase Cloud Functions
+  └── WeatherAppMobile/ # Mobile version (optional)
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## การเริ่มต้นใช้งาน (Getting Started)
 
-### `npm test`
+### 1. ติดตั้ง dependencies
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+cd client
+npm install
+cd ../server
+npm install
+cd ../functions
+npm install
+```
 
-### `npm run build`
+### 2. รันฝั่ง Frontend
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+cd client
+npm start
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 3. รันฝั่ง Backend
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+cd server
+node index.js
+```
 
-### `npm run eject`
+## การตั้งค่า Firebase (Firebase Setup)
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+1. สร้างโปรเจกต์ Firebase ที่ [Firebase Console](https://console.firebase.google.com/)
+2. คัดลอกค่าการตั้งค่าจาก Firebase ไปใส่ใน `client/src/firebase.js`
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## การปรับแต่ง (Customization)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+- สามารถแก้ไขข้อมูลจังหวัดและพิกัดได้ที่ `client/src/data/provinces.js` และ `provinceCoordinates.js`
+- ปรับแต่งกราฟได้ที่ `client/src/components/VPDDailyChart.js`
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## เครดิต (Credits)
 
-## Learn More
+- ข้อมูลสภาพอากาศ: [OpenWeatherMap](https://openweathermap.org/) หรือ API ที่ใช้งาน
+- พัฒนาโดยทีมงาน/ผู้พัฒนา
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## License
 
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+MIT 
