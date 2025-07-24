@@ -2,6 +2,9 @@
   "name": "react-weather-app",
   "version": "0.1.0",
   "private": true,
+
+  "homepage": "https://jsreekajon.github.io/react-weather-app",
+
   "dependencies": {
     "@craco/craco": "^7.1.0",
     "@popperjs/core": "^2.11.8",
@@ -30,17 +33,22 @@
     "web-vitals": "^2.1.4",
     "webpack-dev-server": "^5.2.2"
   },
+
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
+
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
     ]
   },
+
   "browserslist": {
     "production": [
       ">0.2%",

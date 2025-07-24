@@ -9,42 +9,48 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const VPDDailyChart = React.memo(function VPDDailyChart({ weather, selectedDay }) {
- const hourlyVPDData = useMemo(() => {
-  if (!weather?.days || !selectedDay) return [];
+const VPDDailyChart = React.memo(function VPDDailyChart({ weather, selectedDay, lang = "th" }) {
+  const hourlyVPDData = useMemo(() => {
+    if (!weather?.days || !selectedDay) return [];
 
-  const dayData = weather.days.find((d) => d.datetime === selectedDay);
-  if (!dayData?.hours) return [];
+    const dayData = weather.days.find((d) => d.datetime === selectedDay);
+    if (!dayData?.hours) return [];
 
-  return dayData.hours.map((hour) => {
-    const tempC = hour.temp;
-    const humidity = hour.humidity;
+    return dayData.hours.map((hour) => {
+      const tempC = hour.temp;
+      const humidity = hour.humidity;
 
-    if (tempC == null || humidity == null) return null;
+      if (tempC == null || humidity == null) return null;
 
-    // Saturated Vapor Pressure (SVP)
-    const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
-    // Actual Vapor Pressure (AVP)
-    const avp = svp * (humidity / 100);
-    // Vapor Pressure Deficit (VPD)
-    const vpd = parseFloat((svp - avp).toFixed(3));
+      // Saturated Vapor Pressure (SVP)
+      const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+      // Actual Vapor Pressure (AVP)
+      const avp = svp * (humidity / 100);
+      // Vapor Pressure Deficit (VPD)
+      const vpd = parseFloat((svp - avp).toFixed(3));
 
-    return {
-      time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      vpd,
-    };
-  }).filter(Boolean); // remove null
-}, [weather, selectedDay]);
+      return {
+        time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        vpd,
+      };
+    }).filter(Boolean); // remove null
+  }, [weather, selectedDay]);
 
+  // เพิ่มข้อความสองภาษา
+  const chartTitle =
+    lang === "en"
+      ? `VPD Chart (Hourly on ${selectedDay})`
+      : `กราฟ VPD (รายชั่วโมงในวันที่ ${selectedDay})`;
+  const noDataText = lang === "en" ? "No VPD data" : "ไม่มีข้อมูล VPD";
 
   return (
     <div style={{ marginTop: 40 }}>
-      <h4>กราฟ VPD (รายชั่วโมงในวันที่ {selectedDay})</h4>
+      <h4>{chartTitle}</h4>
       {hourlyVPDData.length === 0 ? (
-        <p>ไม่มีข้อมูล VPD</p>
+        <p>{noDataText}</p>
       ) : (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart

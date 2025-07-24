@@ -6,13 +6,70 @@ import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import VPDDailyChart from "./VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
-import { kcOptionsByPlant } from "../data/kcOptions"; // อัปเดต import
+import { kcOptionsByPlant, plantEn } from "../data/kcOptions";
 import useWeatherAggregator from "../hooks/WeatherDataAggregator";
-import WeatherMap from "./map"; // ✅ // ← เพิ่มการ import ใหม่
+import WeatherMap from "./map";
+import provinceEn from "../data/provinceEn";
+import districtEn from "../data/districtEn";
 
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
-// ↓ เหลือแค่ component เดียว: WeatherApp
+// เพิ่มอ็อบเจ็กต์ข้อความสองภาษา
+const translations = {
+  th: {
+    weatherForecast: "พยากรณ์อากาศ",
+    province: "จังหวัด:",
+    district: "อำเภอ:",
+    canopyRadius: "รัศมีทรงพุ่ม (เมตร):",
+    selectPlant: "เลือกชนิดพืช:",
+    kc: (plant) => `Kc (ระยะพัฒนาการของ ${plant}):`,
+    selectDate: "เลือกวันที่:",
+    loading: "กำลังโหลดข้อมูล...",
+    noHourly: "ไม่มีข้อมูลรายชั่วโมง",
+    hourlyWeather: "สภาพอากาศรายชั่วโมง",
+    time: "เวลา",
+    temp: "อุณหภูมิ (°C)",
+    humidity: "ความชื้น (%)",
+    solar: "แสงอาทิตย์ (MJ/m²/hr)",
+    wind: "ความเร็วลม (km/h)",
+    vpd: "VPD (kPa)",
+    eto: "ETo (mm/hr)",
+    dailyEto: "รวม ETo รายวัน",
+    rainfall: "ปริมาณน้ำฝน รายวัน",
+    etc: "ETc (พืชใช้น้ำ)",
+    netWater: "ปริมาณน้ำสุทธิที่ต้องให้น้ำเอง (หลังหักน้ำฝน)",
+    litersPerTree: "ลิตร/ต้น/วัน",
+    notSpecified: "ไม่ระบุ",
+    langBtn: "EN",
+  },
+  en: {
+    weatherForecast: "Weather Forecast",
+    province: "Province:",
+    district: "District:",
+    canopyRadius: "Canopy radius (m):",
+    selectPlant: "Select plant type:",
+    kc: (plant) => `Kc (growth stage of ${plant}):`,
+    selectDate: "Select date:",
+    loading: "Loading...",
+    noHourly: "No hourly data",
+    hourlyWeather: "Hourly Weather",
+    time: "Time",
+    temp: "Temperature (°C)",
+    humidity: "Humidity (%)",
+    solar: "Solar (MJ/m²/hr)",
+    wind: "Wind speed (km/h)",
+    vpd: "VPD (kPa)",
+    eto: "ETo (mm/hr)",
+    dailyEto: "Total daily ETo",
+    rainfall: "Daily rainfall",
+    etc: "ETc (crop water use)",
+    netWater: "Net irrigation required (after rainfall)",
+    litersPerTree: "liters/tree/day",
+    notSpecified: "N/A",
+    langBtn: "TH",
+  },
+};
+
 export default function WeatherApp({ user }) {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
@@ -36,6 +93,8 @@ export default function WeatherApp({ user }) {
   const [canopyRadius, setCanopyRadius] = useState(1);
   const [plantType, setPlantType] = useState("ทุเรียน");
   const [kc, setKc] = useState(kcOptionsByPlant[plantType]?.[0]);
+  const [lang, setLang] = useState("th");
+  const t_ = translations[lang];
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
 
@@ -65,7 +124,7 @@ export default function WeatherApp({ user }) {
           location
         )}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
         const response = await fetch(url);
-        if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
+        if (!response.ok) throw new Error(lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data");
         const data = await response.json();
         setWeather(data);
       } catch (err) {
@@ -75,7 +134,8 @@ export default function WeatherApp({ user }) {
       }
     };
     fetchWeather();
-  }, [province, district]);
+    // eslint-disable-next-line
+  }, [province, district, lang]);
 
   useEffect(() => {
     if (weather?.days?.length > 0) setSelectedDay(weather.days[0].datetime);
@@ -123,22 +183,48 @@ export default function WeatherApp({ user }) {
     return null;
   }, [t, h]);
 
+  // ฟังก์ชันแปลงชื่อจังหวัด/อำเภอ/พืช ตามภาษา
+  const getProvinceLabel = (prov) => lang === "en" ? (provinceEn[prov] || prov) : prov;
+  const getDistrictLabel = (prov, dist) => {
+    if (lang === "en") {
+      // ใช้ provinceEn เพื่อแปลงชื่อจังหวัดไทยเป็นอังกฤษก่อนหาใน districtEn
+      const provEn = provinceEn[prov] || prov;
+      return (districtEn[provEn]?.[dist] || dist);
+    }
+    return dist;
+  };
+  const getPlantLabel = (plant) =>
+    lang === "en"
+      ? (plantEn[plant]?.name || plant)
+      : plant;
+
+  // สร้าง options dropdown ตามภาษา
   const provinceOptions = Object.keys(provinces).map((prov) => ({
-    label: prov,
+    label: getProvinceLabel(prov),
     value: prov,
   }));
   const districtOptions =
-    provinces[province.value]?.map((dist) => ({ label: dist, value: dist })) ||
-    [];
+    provinces[province.value]?.map((dist) => ({
+      label: getDistrictLabel(province.value, dist),
+      value: dist,
+    })) || [];
+  const plantOptions = Object.keys(kcOptionsByPlant).map((key) => ({
+    label: getPlantLabel(key),
+    value: key,
+  }));
 
   const formatDateThai = (isoDate) => {
     const [y, m, d] = isoDate.split("-");
     return `${d}-${m}-${y}`;
   };
+  const formatDateEn = (isoDate) => {
+    const [y, m, d] = isoDate.split("-");
+    return `${y}-${m}-${d}`;
+  };
 
   const dayOptions =
     weather?.days.map((day) => ({
-      label: formatDateThai(day.datetime),
+      label: lang === "th" ? formatDateThai(day.datetime) : formatDateEn(day.datetime),
       value: day.datetime,
     })) || [];
 
@@ -271,7 +357,14 @@ export default function WeatherApp({ user }) {
 
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
-      <h2>พยากรณ์อากาศ</h2>
+      {/* ปุ่มเปลี่ยนภาษา */}
+      <button
+        style={{ float: "right", marginTop: 10 }}
+        onClick={() => setLang(lang === "th" ? "en" : "th")}
+      >
+        {t_.langBtn}
+      </button>
+      <h2>{t_.weatherForecast}</h2>
       <div className="row">
         <div className="col-6">
           <WeatherMap
@@ -286,23 +379,29 @@ export default function WeatherApp({ user }) {
             vpd={vpd}
           />
 
-          <label>จังหวัด:</label>
+          <label>{t_.province}</label>
           <Select
             options={provinceOptions}
-            value={province}
+            value={{
+              label: getProvinceLabel(province.value),
+              value: province.value,
+            }}
             onChange={setProvince}
             isSearchable
           />
 
-          <label>อำเภอ:</label>
+          <label>{t_.district}</label>
           <Select
             options={districtOptions}
-            value={district}
+            value={{
+              label: getDistrictLabel(province.value, district.value),
+              value: district.value,
+            }}
             onChange={setDistrict}
             isSearchable
           />
 
-          <label>รัศมีทรงพุ่ม (เมตร):</label>
+          <label>{t_.canopyRadius}</label>
           <input
             type="number"
             value={canopyRadius}
@@ -312,26 +411,49 @@ export default function WeatherApp({ user }) {
             step="1"
           />
 
-          <label>เลือกชนิดพืช:</label>
+          <label>{t_.selectPlant}</label>
           <Select
-            options={Object.keys(kcOptionsByPlant).map((key) => ({
-              label: key,
-              value: key,
-            }))}
-            value={{ label: plantType, value: plantType }}
+            options={plantOptions}
+            value={{
+              label: getPlantLabel(plantType),
+              value: plantType,
+            }}
             onChange={(option) => setPlantType(option.value)}
           />
 
-          <label>Kc (ระยะพัฒนาการของ {plantType}):</label>
+          <label>
+            {t_.kc(
+              lang === "en"
+                ? (plantEn[plantType]?.name || plantType)
+                : plantType
+            )}
+          </label>
           <Select
-            options={kcOptionsByPlant[plantType]}
-            value={kc}
+            options={
+              lang === "en" && plantEn[plantType]?.labelEn
+                ? kcOptionsByPlant[plantType].map((opt, idx) => ({
+                    label: plantEn[plantType].labelEn[idx],
+                    value: opt.value,
+                  }))
+                : kcOptionsByPlant[plantType]
+            }
+            value={
+              lang === "en" && plantEn[plantType]?.labelEn
+                ? {
+                    label:
+                      plantEn[plantType].labelEn[
+                        kcOptionsByPlant[plantType].findIndex((k) => k.value === kc.value)
+                      ],
+                    value: kc.value,
+                  }
+                : kc
+            }
             onChange={setKc}
           />
 
           {weather && (
             <>
-              <label>เลือกวันที่:</label>
+              <label>{t_.selectDate}</label>
               <Select
                 options={dayOptions}
                 value={dayOptions.find((opt) => opt.value === selectedDay)}
@@ -340,14 +462,14 @@ export default function WeatherApp({ user }) {
             </>
           )}
 
-          {loading && <p>กำลังโหลดข้อมูล...</p>}
+          {loading && <p>{t_.loading}</p>}
           {error && <p style={{ color: "red" }}>{error}</p>}
         </div>
 
         <div className="col-6">
-          <h4>สภาพอากาศรายชั่วโมง</h4>
+          <h4>{t_.hourlyWeather}</h4>
           {hourlyData.length === 0 ? (
-            <p>ไม่มีข้อมูลรายชั่วโมง</p>
+            <p>{t_.noHourly}</p>
           ) : (
             <>
               <table
@@ -361,13 +483,13 @@ export default function WeatherApp({ user }) {
               >
                 <thead>
                   <tr>
-                    <th>เวลา</th>
-                    <th>อุณหภูมิ (°C)</th>
-                    <th>ความชื้น (%)</th>
-                    <th>แสงอาทิตย์ (MJ/m²/hr)</th>
-                    <th>ความเร็วลม (km/h)</th>
-                    <th>VPD (kPa)</th>
-                    <th>ETo (mm/hr)</th>
+                    <th>{t_.time}</th>
+                    <th>{t_.temp}</th>
+                    <th>{t_.humidity}</th>
+                    <th>{t_.solar}</th>
+                    <th>{t_.wind}</th>
+                    <th>{t_.vpd}</th>
+                    <th>{t_.eto}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -401,31 +523,31 @@ export default function WeatherApp({ user }) {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })
-                            : "ไม่ระบุ"}
+                            : t_.notSpecified}
                         </td>
                         <td>
-                          {temp !== undefined ? temp.toFixed(1) : "ไม่ระบุ"}
+                          {temp !== undefined ? temp.toFixed(1) : t_.notSpecified}
                         </td>
                         <td>
                           {humidity !== undefined
                             ? humidity.toFixed(0)
-                            : "ไม่ระบุ"}
+                            : t_.notSpecified}
                         </td>
                         <td>
-                          {solarMJ !== null ? solarMJ.toFixed(2) : "ไม่ระบุ"}
+                          {solarMJ !== null ? solarMJ.toFixed(2) : t_.notSpecified}
                         </td>
                         <td>
-                          {wind !== undefined ? wind.toFixed(1) : "ไม่ระบุ"}
+                          {wind !== undefined ? wind.toFixed(1) : t_.notSpecified}
                         </td>
                         <td>
                           {temp !== undefined && humidity !== undefined
                             ? calcVPD(temp, humidity)
-                            : "ไม่ระบุ"}
+                            : t_.notSpecified}
                         </td>
                         <td>
                           {etoHourly !== null
                             ? etoHourly.toFixed(3)
-                            : "ไม่ระบุ"}
+                            : t_.notSpecified}
                         </td>
                       </tr>
                     );
@@ -434,31 +556,30 @@ export default function WeatherApp({ user }) {
               </table>
 
               <div style={{ marginTop: 10, fontWeight: "bold" }}>
-                รวม ETo รายวัน: {totalDailyETo} mm
+                {t_.dailyEto}: {totalDailyETo} mm
               </div>
               <div style={{ marginTop: 10, fontWeight: "bold" }}>
                 <div>
-                  ปริมาณน้ำฝน รายวัน:{" "}
-                  {rainfall !== null ? `${rainfall} mm` : "ไม่ระบุ"}
+                  {t_.rainfall}:{" "}
+                  {rainfall !== null ? `${rainfall} mm` : t_.notSpecified}
                 </div>
                 <div>
-                  ETc (พืชใช้น้ำ):{" "}
-                  {etc !== null ? `${etc.toFixed(3)} mm/day` : "ไม่ระบุ"}
+                  {t_.etc}:{" "}
+                  {etc !== null ? `${etc.toFixed(3)} mm/day` : t_.notSpecified}
                 </div>
                 {etc !== null &&
                   rainfall !== null &&
                   canopyAreaSqM !== null && (
                     <div style={{ color: "blue", marginTop: 10 }}>
-                      ปริมาณน้ำสุทธิที่ต้องให้น้ำเอง (หลังหักน้ำฝน) = (
-                      {etc.toFixed(3)} - {rainfall.toFixed(2)}) ×{" "}
+                      {t_.netWater} = ({etc.toFixed(3)} - {rainfall.toFixed(2)}) ×{" "}
                       {canopyAreaSqM.toFixed(4)} = {waterNetPerTree}{" "}
-                      ลิตร/ต้น/วัน
+                      {t_.litersPerTree}
                     </div>
                   )}
               </div>
             </>
           )}
-          <VPDDailyChart weather={weather} selectedDay={selectedDay} />
+          <VPDDailyChart weather={weather} selectedDay={selectedDay} lang={lang} />
         </div>
       </div>
     </div>
