@@ -15,7 +15,9 @@ export default function useFetchProfile() {
 
       const token = await user.getIdToken();
       console.log("🔐 User Token:", token);
-      const res = await fetch("http://localhost:3001/api/profile", {
+
+      // ✅ เปลี่ยน URL ตรงนี้
+      const res = await fetch("/api/profile", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
