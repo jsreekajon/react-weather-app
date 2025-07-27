@@ -1,47 +1,32 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+/**
+ * Import function triggers from their respective submodules:
+ *
+ * const {onCall} = require("firebase-functions/v2/https");
+ * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+ *
+ * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ */
 
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+const {setGlobalOptions} = require("firebase-functions");
+const {onRequest} = require("firebase-functions/https");
+const logger = require("firebase-functions/logger");
 
-exports.aggregateHourlyWeather = functions.pubsub
-  .schedule("every 60 minutes")
-  .onRun(async (context) => {
-    const now = admin.firestore.Timestamp.now();
-    const oneHourAgo = admin.firestore.Timestamp.fromMillis(now.toMillis() - 60 * 60 * 1000);
+// For cost control, you can set the maximum number of containers that can be
+// running at the same time. This helps mitigate the impact of unexpected
+// traffic spikes by instead downgrading performance. This limit is a
+// per-function limit. You can override the limit for each function using the
+// `maxInstances` option in the function's options, e.g.
+// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
+// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
+// functions should each use functions.runWith({ maxInstances: 10 }) instead.
+// In the v1 API, each function can only serve one request per container, so
+// this will be the maximum concurrent request count.
+setGlobalOptions({ maxInstances: 10 });
 
-    const snapshot = await admin.firestore().collection('raw_weather')
-      .where('timestamp', '>=', oneHourAgo)
-      .get();
+// Create and deploy your first functions
+// https://firebase.google.com/docs/functions/get-started
 
-    if (snapshot.empty) {
-      console.log("No raw data found for past 1 hour");
-      return null;
-    }
-
-    const records = snapshot.docs.map(doc => doc.data());
-
-    const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
-
-    const result = {
-      timestamp: now.toDate(),
-      province: records[0].province,
-      district: records[0].district,
-      avgETo: avg(records.map(r => r.totalDailyETo)),
-      avgETc: avg(records.map(r => r.etc)),
-      avgRainfall: avg(records.map(r => r.rainfall)),
-      avgWaterNetPerTree: avg(records.map(r => r.waterNetPerTree)),
-      avgVPD: avg(records.map(r => r.vpd)),
-    };
-
-    await admin.firestore().collection('weather_hourly_avg').add(result);
-    console.log("✅ บันทึกค่าเฉลี่ยรายชั่วโมงสำเร็จ");
-
-    // ลบ raw data เก่า
-    const batch = admin.firestore().batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-
-    return null;
-});
+// exports.helloWorld = onRequest((request, response) => {
+//   logger.info("Hello logs!", {structuredData: true});
+//   response.send("Hello from Firebase!");
+// });

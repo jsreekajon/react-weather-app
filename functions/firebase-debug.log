@@ -1,0 +1,50 @@
+[debug] [2025-07-26T08:22:56.695Z] ----------------------------------------------------------------------
+[debug] [2025-07-26T08:22:56.697Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Ciracore\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
+[debug] [2025-07-26T08:22:56.698Z] CLI Version:   14.11.1
+[debug] [2025-07-26T08:22:56.699Z] Platform:      win32
+[debug] [2025-07-26T08:22:56.700Z] Node Version:  v22.16.0
+[debug] [2025-07-26T08:22:56.700Z] Time:          Sat Jul 26 2025 15:22:56 GMT+0700 (เวลาอินโดจีน)
+[debug] [2025-07-26T08:22:56.701Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-07-26T08:22:56.944Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-07-26T08:22:56.945Z] > authorizing via signed-in user (65310140@go.buu.ac.th)
+[info] i  emulators: Starting emulators: hosting {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: hosting"}}
+[debug] [2025-07-26T08:22:56.954Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-07-26T08:22:56.954Z] [hosting] Hosting Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-07-26T08:22:56.954Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-07-26T08:22:56.958Z] [hub] writing locator at C:\Users\Ciracore\AppData\Local\Temp\hub-weather-31ba2.json
+[debug] [2025-07-26T08:22:56.976Z] Checked if tokens are valid: true, expires at: 1753521203188
+[debug] [2025-07-26T08:22:56.977Z] Checked if tokens are valid: true, expires at: 1753521203188
+[debug] [2025-07-26T08:22:56.977Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/weather-31ba2/sites 
+[debug] [2025-07-26T08:22:58.206Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/weather-31ba2/sites 200
+[debug] [2025-07-26T08:22:58.206Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/weather-31ba2/sites {"sites":[{"name":"projects/weather-31ba2/sites/weather-31ba2","defaultUrl":"https://weather-31ba2.web.app","appId":"1:229233406375:web:59013c92957e3279308682","type":"DEFAULT_SITE"}]}
+[debug] [2025-07-26T08:22:58.206Z] Checked if tokens are valid: true, expires at: 1753521203188
+[debug] [2025-07-26T08:22:58.206Z] Checked if tokens are valid: true, expires at: 1753521203188
+[debug] [2025-07-26T08:22:58.206Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/weather-31ba2/webApps/1:229233406375:web:59013c92957e3279308682/config [none]
+[debug] [2025-07-26T08:22:59.521Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/weather-31ba2/webApps/1:229233406375:web:59013c92957e3279308682/config 200
+[debug] [2025-07-26T08:22:59.521Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/weather-31ba2/webApps/1:229233406375:web:59013c92957e3279308682/config {"projectId":"weather-31ba2","appId":"1:229233406375:web:59013c92957e3279308682","databaseURL":"https://weather-31ba2-default-rtdb.firebaseio.com","storageBucket":"weather-31ba2.firebasestorage.app","apiKey":"AIzaSyCfmDRoVBHhhiO27zWO-vfmtkB2MKkND9Q","authDomain":"weather-31ba2.firebaseapp.com","messagingSenderId":"229233406375","measurementId":"G-KWV1Q5JET0"}
+[debug] [2025-07-26T08:22:59.531Z] Checked if tokens are valid: true, expires at: 1753521203188
+[debug] [2025-07-26T08:22:59.531Z] Checked if tokens are valid: true, expires at: 1753521203188
+[debug] [2025-07-26T08:22:59.532Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/weather-31ba2 [none]
+[debug] [2025-07-26T08:23:00.120Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/weather-31ba2 200
+[debug] [2025-07-26T08:23:00.120Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/weather-31ba2 {"projectId":"weather-31ba2","projectNumber":"229233406375","displayName":"weather","name":"projects/weather-31ba2","resources":{"hostingSite":"weather-31ba2","realtimeDatabaseInstance":"weather-31ba2-default-rtdb"},"state":"ACTIVE","etag":"1_cb3aa4c0-03ae-486f-8a42-41b1e01debbc"}
+[info] i  hosting[weather-31ba2]: Serving hosting files from: client/build {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mclient/build\u001b[22m"}}
+[info] +  hosting[weather-31ba2]: Local server: http://127.0.0.1:5000 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://127.0.0.1:5000\u001b[22m\u001b[24m"}}
+[warn] !  emulators: The Emulator UI is not starting, either because none of the running emulators have a UI component or the Emulator UI cannot determine the Project ID. Pass the --project flag to specify a project. {"metadata":{"emulator":{"name":"hub"},"message":"The Emulator UI is not starting, either because none of the running emulators have a UI component or the Emulator UI cannot determine the Project ID. Pass the --project flag to specify a project."}}
+[debug] [2025-07-26T08:23:00.154Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+└─────────────────────────────────────────────────────────────┘
+
+┌──────────┬────────────────┐
+│ Emulator │ Host:Port      │
+├──────────┼────────────────┤
+│ Hosting  │ 127.0.0.1:5000 │
+└──────────┴────────────────┘
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500
+
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
+[debug] [2025-07-26T09:16:27.853Z] Received signal SIGHUP 1
