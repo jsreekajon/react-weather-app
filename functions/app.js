@@ -7,11 +7,11 @@ const axios = require("axios");
 const mqtt = require("mqtt");
 
 // โหลด serviceAccountKey.json (แก้ path ตามจริง)
-const serviceAccount = require("../server/serviceAccountKey.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 
 // เริ่ม Firebase Admin SDK
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
