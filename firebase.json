@@ -6,5 +6,8 @@
       { "source": "/api/**", "function": "api" },
       { "source": "**", "destination": "/index.html" }
     ]
+  },
+  "functions": {
+    "source": "functions"
   }
 }
