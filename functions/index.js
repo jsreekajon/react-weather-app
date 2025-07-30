@@ -1,9 +1,7 @@
-const functions = require("firebase-functions");
-const { setGlobalOptions } = require("firebase-functions");
 const app = require("./app");
 
-// ตั้งค่า maxInstances เพื่อควบคุมค่าใช้จ่าย
-setGlobalOptions({ maxInstances: 10 });
+const PORT = process.env.PORT || 3000;
 
-// Export Firebase function ให้ตรงกับ firebase.json
-exports.api = functions.https.onRequest(app);
+app.listen(PORT, () => {
+  console.log(`✅ Server listening on port ${PORT}`);
+});

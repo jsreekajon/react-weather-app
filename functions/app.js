@@ -3,11 +3,10 @@ const cors = require("cors");
 const admin = require("firebase-admin");
 const path = require("path");
 const fs = require("fs");
-const axios = require("axios");
 const mqtt = require("mqtt");
 
-// โหลด serviceAccountKey.json (แก้ path ตามจริง)
-const serviceAccount = require("../server/serviceAccountKey.json");
+// โหลด serviceAccount จาก ENV
+const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 
 // เริ่ม Firebase Admin SDK
 admin.initializeApp({
@@ -29,7 +28,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Auth Middleware
+// Middleware ตรวจสอบ token
 async function verifyToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization || "";
@@ -48,15 +47,16 @@ async function verifyToken(req, res, next) {
   }
 }
 
-// ฟังก์ชันแปลง email เป็น doc id
+// Helper
 function safeEmailId(email) {
   return email.replace(/[@.]/g, "_");
 }
 
-// Routes ตัวอย่าง (รวมทั้ง api/weather-hourly ที่มี mock data)
+// Mock weather data route
 app.get("/api/weather-hourly", (req, res) => {
-  const { province, district, start, end } = req.query;
+  const { province, district, start } = req.query;
   const data = [];
+
   for (let h = 0; h < 24; h++) {
     data.push({
       date: start,
@@ -68,13 +68,14 @@ app.get("/api/weather-hourly", (req, res) => {
       vpd: Math.random().toFixed(2),
     });
   }
+
   res.json(data);
 });
 
-// (เพิ่ม route อื่น ๆ จากโค้ดที่คุณให้มา เช่น /api/profile, /api/weather-range, /api/weather-result, /api/weather-input ...)
+// เพิ่ม routes อื่นๆ ตามต้องการ เช่น /api/weather-result, /api/profile เป็นต้น...
 
-// Serve React build (ถ้ามี)
-const buildPath = path.join(__dirname, "../build");
+// ให้บริการ React frontend (ถ้ามี build)
+const buildPath = path.join(__dirname, "../client/build");
 if (fs.existsSync(buildPath)) {
   app.use(express.static(buildPath));
   app.get("*", (req, res) => {
@@ -82,17 +83,18 @@ if (fs.existsSync(buildPath)) {
   });
 }
 
-// MQTT Setup (ถ้าจะใช้)
+// MQTT integration (optional)
 const mqttClient = mqtt.connect("mqtt://broker.emqx.io:1883");
 mqttClient.on("connect", () => {
-  const topics = ["weather/data", "weather/processed"];
-  mqttClient.subscribe(topics, (err) => {
-    if (!err) console.log("Subscribed to MQTT topics");
+  mqttClient.subscribe(["weather/data", "weather/processed"], (err) => {
+    if (!err) console.log("✅ Subscribed to MQTT topics");
   });
 });
+
 mqttClient.on("message", async (topic, message) => {
   try {
     const payload = JSON.parse(message.toString());
+
     if (topic === "weather/processed") {
       await db.collection("weather_results").add({
         ...payload,
@@ -100,7 +102,7 @@ mqttClient.on("message", async (topic, message) => {
       });
     }
   } catch (e) {
-    console.error("MQTT message parse error:", e.message);
+    console.error("❌ MQTT error:", e.message);
   }
 });
 
