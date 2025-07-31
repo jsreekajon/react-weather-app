@@ -46,10 +46,11 @@ export default function DataPage() {
     try {
       const dateStr = selectedDate.toISOString().split("T")[0];
       const res = await fetch(
-        `/api/weather-hourly?province=${encodeURIComponent(
+        `${process.env.REACT_APP_API_BASE}/api/weather-hourly?province=${encodeURIComponent(
           province.value
         )}&district=${encodeURIComponent(district.value)}&date=${dateStr}`
       );
+
       if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
       const json = await res.json();
       setData(json);
