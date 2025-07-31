@@ -10,6 +10,9 @@ import Select from "react-select";
 
 registerLocale("th", th);
 
+// ✅ ตั้งค่า baseUrl ไว้ส่วนบน
+const baseUrl = process.env.REACT_APP_API_BASE;
+
 export default function DataPage() {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
@@ -45,11 +48,12 @@ export default function DataPage() {
     setData([]);
     try {
       const dateStr = selectedDate.toISOString().split("T")[0];
-      const res = await fetch(
-        `/api/weather-hourly?province=${encodeURIComponent(
-          province.value
-        )}&district=${encodeURIComponent(district.value)}&date=${dateStr}`
-      );
+      const url = `${baseUrl}/api/weather-hourly?province=${encodeURIComponent(
+        province.value
+      )}&district=${encodeURIComponent(district.value)}&date=${dateStr}`;
+
+      const res = await fetch(url);
+
       if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
       const json = await res.json();
       setData(json);
