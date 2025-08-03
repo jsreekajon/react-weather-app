@@ -6,14 +6,13 @@ import th from "date-fns/locale/th";
 import WeatherApp from "../components/WeatherApp";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
-// ✅ เพิ่มบรรทัดนี้
 import useFetchProfile from "../hooks/useFetchProfile";
 
 registerLocale("th", th);
 
 export default function DashboardPage() {
-  const [user] = useAuthState(auth); // ✅ เพิ่มการดึงผู้ใช้จาก Firebase Auth
-  useFetchProfile(); // ✅ เรียกใช้ Hook
+  const [user] = useAuthState(auth); // ดึงผู้ใช้จาก Firebase Auth
+  useFetchProfile();
 
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
@@ -22,6 +21,12 @@ export default function DashboardPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const formatDate = (date) => date.toISOString().split("T")[0];
+
+  // ✅ เพิ่ม fetchData ใน useEffect
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line
+  }, [startDate, endDate]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,10 +48,6 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [startDate, endDate]);
 
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
@@ -75,6 +76,9 @@ export default function DashboardPage() {
           โหลดข้อมูล
         </button>
       </div>
+
+      {/* ส่ง user เข้า WeatherApp */}
+      <WeatherApp user={user} />
 
       {loading ? (
         <p>⏳ กำลังโหลด...</p>

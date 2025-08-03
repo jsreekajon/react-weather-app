@@ -33,7 +33,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "set NODE_OPTIONS=--max_old_space_size=4096 && set CI=true && craco build",
     "test": "craco test",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build"
