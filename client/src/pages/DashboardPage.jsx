@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
-import WeatherApp from "../components/WeatherApp";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
 import useFetchProfile from "../hooks/useFetchProfile";
@@ -77,8 +76,6 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* ส่ง user เข้า WeatherApp */}
-      <WeatherApp user={user} />
 
       {loading ? (
         <p>⏳ กำลังโหลด...</p>
