@@ -9,6 +9,7 @@ import { calculateHourlyETo } from "../utils/calculateETo"; // เพิ่ม i
 
 registerLocale("th", th);
 
+// ✅ เก็บฝั่ง new-data
 const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
 
 export default function DataPage() {
@@ -40,7 +41,6 @@ export default function DataPage() {
       value: dist,
     })) || [];
 
-  // ฟังก์ชันแปลงวันที่เป็น วัน-เดือน-ปี
   const formatDateThai = (isoDate) => {
     const [y, m, d] = isoDate.split("-");
     return `${d}-${m}-${y}`;
@@ -51,7 +51,6 @@ export default function DataPage() {
     setLoading(true);
     setData([]);
     try {
-      // ดึงข้อมูลจาก Visual Crossing API
       const dateStr = selectedDate.toISOString().slice(0, 10);
       const location = `${province.value},TH`;
       const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
@@ -62,15 +61,12 @@ export default function DataPage() {
       if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
       const json = await res.json();
 
-      // แปลงข้อมูลให้อยู่ในรูปแบบที่ตารางต้องการ พร้อมคำนวณ ETo
       const hourly = json.days?.[0]?.hours || [];
       const tableData = hourly.map((row) => {
-        // คำนวณ solar เป็น MJ/m²/hr
         const solarMJ =
           row.solarradiation !== undefined
             ? (row.solarradiation * 3600) / 1e6
             : null;
-        // คำนวณ ETo (mm/hr)
         const etoHourly =
           row.temp !== undefined &&
           row.humidity !== undefined &&
@@ -83,7 +79,6 @@ export default function DataPage() {
                 altitude: 100,
               })
             : null;
-        // VPD
         const vpd =
           row.temp !== undefined && row.humidity !== undefined
             ? (
@@ -119,9 +114,12 @@ export default function DataPage() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "WeatherData");
-    // สร้างชื่อไฟล์ตามวันที่ที่เลือก เช่น weather_data(31-07-2025).xlsx
     const dateStr = selectedDate
-      ? selectedDate.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
+      ? selectedDate.toLocaleDateString("th-TH", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }).replace(/\//g, "-")
       : "unknown";
     XLSX.writeFile(wb, `weather_data(${dateStr}).xlsx`);
   };
@@ -129,7 +127,9 @@ export default function DataPage() {
   return (
     <div style={{ maxWidth: 900, margin: "30px auto" }}>
       <h2>ค้นหาข้อมูลอากาศ 24 ชั่วโมง (Visual Crossing)</h2>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+      <div
+        style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}
+      >
         <div style={{ minWidth: 200 }}>
           <label>จังหวัด:</label>
           <Select
@@ -179,7 +179,11 @@ export default function DataPage() {
       {loading ? (
         <p>กำลังโหลดข้อมูล...</p>
       ) : data.length ? (
-        <table border="1" cellPadding={6} style={{ width: "100%", fontSize: 14 }}>
+        <table
+          border="1"
+          cellPadding={6}
+          style={{ width: "100%", fontSize: 14 }}
+        >
           <thead>
             <tr>
               <th>เวลา</th>
@@ -193,14 +197,11 @@ export default function DataPage() {
           </thead>
           <tbody>
             {data.map((row, i) => {
-              // แปลงเวลาเป็น HH:mm
               let hourStr = row.hour;
               if (typeof hourStr === "string") {
-                // ถ้าเป็น "0:00" หรือ "00:00:00" ให้แสดงเป็น "00:00"
                 const parts = hourStr.split(":");
                 hourStr = `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
               }
-              // แปลง solar เป็น MJ/m²/hr
               const solarMJ =
                 row.solarradiation !== undefined
                   ? ((row.solar * 3600) / 1e6).toFixed(2)
