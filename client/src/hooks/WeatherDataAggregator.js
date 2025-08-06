@@ -29,7 +29,7 @@ export default function useWeatherDataAggregator(user) {
     };
 
     fetchData();
-  }, [user.email]); // ✅ ใส่ dependency ให้ถูกต้อง
+  }, [user], [user.email]); // ✅ ใส่ dependency ให้ถูกต้อง
 
   return { data, loading };
 }

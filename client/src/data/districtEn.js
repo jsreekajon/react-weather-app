@@ -1,4 +1,4 @@
-export default {
+const districts = {
   "Bangkok": {
     "เขตพระนคร": "Phra Nakhon",
     "เขตดุสิต": "Dusit",
@@ -1083,3 +1083,4 @@ export default {
     "เจาะไอร้อง": "Cho-airong"
   }
 };
+export default districts;
