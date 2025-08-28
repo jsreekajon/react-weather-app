@@ -24,7 +24,8 @@ export default function DataPage() {
     label: defaultDistrict,
     value: defaultDistrict,
   });
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -51,54 +52,58 @@ export default function DataPage() {
     setLoading(true);
     setData([]);
     try {
-      const dateStr = selectedDate.toISOString().slice(0, 10);
+      // Format start and end date
+      const startStr = startDate.toISOString().slice(0, 10);
+      const endStr = endDate.toISOString().slice(0, 10);
       const location = `${province.value},TH`;
       const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
         location
-      )}/${dateStr}/${dateStr}?unitGroup=metric&include=hours&key=${API_KEY}&contentType=json`;
+      )}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
       const json = await res.json();
 
-      const hourly = json.days?.[0]?.hours || [];
-      const tableData = hourly.map((row) => {
-        const solarMJ =
-          row.solarradiation !== undefined
-            ? (row.solarradiation * 3600) / 1e6
-            : null;
-        const etoHourly =
-          row.temp !== undefined &&
-          row.humidity !== undefined &&
-          solarMJ !== null
-            ? calculateHourlyETo({
-                temp: row.temp,
-                humidity: row.humidity,
-                windSpeed: row.windspeed ?? 2,
-                solarRadiation: solarMJ,
-                altitude: 100,
-              })
-            : null;
-        const vpd =
-          row.temp !== undefined && row.humidity !== undefined
-            ? (
-                0.6108 *
-                  Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
-                (row.humidity / 100) *
-                  (0.6108 *
-                    Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
-              ).toFixed(3)
-            : "";
-        return {
-          date: formatDateThai(dateStr),
-          hour: row.datetime,
-          temp: row.temp ?? 0,
-          humidity: row.humidity ?? 0,
-          solar: row.solarradiation ?? 0,
-          wind: row.windspeed ?? 0,
-          vpd,
-          eto: etoHourly !== null ? etoHourly.toFixed(3) : "",
-        };
+      // Flatten all hours from all days, add date field
+      const tableData = [];
+      (json.days || []).forEach((day) => {
+        const dateLabel = formatDateThai(day.datetime);
+        (day.hours || []).forEach((row) => {
+          const solarMJ =
+            row.solarradiation !== undefined
+              ? (row.solarradiation * 3600) / 1e6
+              : null;
+          const etoHourly =
+            row.temp !== undefined &&
+            row.humidity !== undefined &&
+            solarMJ !== null
+              ? calculateHourlyETo({
+                  temp: row.temp,
+                  humidity: row.humidity,
+                  windSpeed: row.windspeed ?? 2,
+                  solarRadiation: solarMJ,
+                  altitude: 100,
+                })
+              : null;
+          const vpd =
+            row.temp !== undefined && row.humidity !== undefined
+              ? (
+                  0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
+                  (row.humidity / 100) *
+                    (0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
+                ).toFixed(3)
+              : "";
+          tableData.push({
+            date: dateLabel,
+            hour: row.datetime,
+            temp: row.temp ?? 0,
+            humidity: row.humidity ?? 0,
+            solar: row.solarradiation ?? 0,
+            wind: row.windspeed ?? 0,
+            vpd,
+            eto: etoHourly !== null ? etoHourly.toFixed(3) : "",
+          });
+        });
       });
 
       setData(tableData);
@@ -114,14 +119,25 @@ export default function DataPage() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "WeatherData");
-    const dateStr = selectedDate
-      ? selectedDate.toLocaleDateString("th-TH", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        }).replace(/\//g, "-")
+    const startStr = startDate
+      ? startDate
+          .toLocaleDateString("th-TH", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })
+          .replace(/\//g, "-")
       : "unknown";
-    XLSX.writeFile(wb, `weather_data(${dateStr}).xlsx`);
+    const endStr = endDate
+      ? endDate
+          .toLocaleDateString("th-TH", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })
+          .replace(/\//g, "-")
+      : "unknown";
+    XLSX.writeFile(wb, `weather_data(${startStr}_to_${endStr}).xlsx`);
   };
 
   return (
@@ -157,10 +173,19 @@ export default function DataPage() {
           />
         </div>
         <div>
-          <label>วันที่:</label>
+          <label>วันที่เริ่มต้น:</label>
           <DatePicker
-            selected={selectedDate}
-            onChange={setSelectedDate}
+            selected={startDate}
+            onChange={setStartDate}
+            locale="th"
+            dateFormat="dd-MM-yyyy"
+          />
+        </div>
+        <div>
+          <label>วันที่สิ้นสุด:</label>
+          <DatePicker
+            selected={endDate}
+            onChange={setEndDate}
             locale="th"
             dateFormat="dd-MM-yyyy"
           />
@@ -186,6 +211,7 @@ export default function DataPage() {
         >
           <thead>
             <tr>
+              <th>วันที่</th>
               <th>เวลา</th>
               <th>อุณหภูมิ (°C)</th>
               <th>ความชื้น (%)</th>
@@ -200,15 +226,25 @@ export default function DataPage() {
               let hourStr = row.hour;
               if (typeof hourStr === "string") {
                 const parts = hourStr.split(":");
-                hourStr = `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+                hourStr = `${parts[0].padStart(2, "0")}:${parts[1].padStart(
+                  2,
+                  "0"
+                )}`;
               }
               const solarMJ =
-                row.solarradiation !== undefined
+                row.solar !== undefined
                   ? ((row.solar * 3600) / 1e6).toFixed(2)
                   : row.solar.toFixed(2);
 
+              // ✅ เช็คว่าเป็นเวลา 00:00
+              const isMidnight = hourStr === "00:00";
+
               return (
-                <tr key={i}>
+                <tr
+                  key={i}
+                  style={isMidnight ? { backgroundColor: "#eee" } : {}}
+                >
+                  <td>{row.date}</td>
                   <td>{hourStr}</td>
                   <td>{row.temp.toFixed(1)}</td>
                   <td>{row.humidity.toFixed(0)}</td>
