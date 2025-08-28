@@ -633,196 +633,32 @@ export default function HomePage() {
                         {t_.litersPerTree}
                       </div>
 
-                      {/* Climate Scenario Controls */}
-                      <div style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 10 }}>
-                        <label>
-                          อุณหภูมิ&nbsp;
-                          <input
-                            type="number"
-                            value={climateTempDelta}
-                            onChange={e => setClimateTempDelta(Number(e.target.value))}
-                            style={{ width: 60 }}
-                          />
-                          &nbsp;°C
-                        </label>
-                        <label>
-                          ความชื้น&nbsp;
-                          <input
-                            type="number"
-                            value={climateHumidityDelta}
-                            onChange={e => setClimateHumidityDelta(Number(e.target.value))}
-                            style={{ width: 60 }}
-                          />
-                          &nbsp;%
-                        </label>
-                      </div>
-                      <div style={{ color: "red", marginTop: 10 }}>
-                        Climate Scenario = {climateScenarioWaterNetPerTree}
-                      </div>
-
-                      {/* ตาราง Climate Scenario */}
-                      <div style={{ marginTop: 10 }}>
-                        <table
-                          border="1"
-                          cellPadding="5"
-                          style={{
-                            borderCollapse: "collapse",
-                            width: "100%",
-                            textAlign: "center",
-                          }}
-                        >
-                          <thead>
-                            <tr>
-                              <th>{t_.time}</th>
-                              <th>{t_.temp}</th>
-                              <th>{t_.humidity}</th>
-                              <th>{t_.solar}</th>
-                              <th>{t_.wind}</th>
-                              <th>{t_.vpd}</th>
-                              <th>{t_.eto}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {hourlyData.map((hour) => {
-                              // ใช้ delta ที่ผู้ใช้กรอก
-                              const temp = hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
-                              const humidity = hour.humidity !== undefined ? hour.humidity + climateHumidityDelta : undefined;
-                              const humidityClamped = humidity !== undefined ? Math.max(0, Math.min(100, humidity)) : undefined;
-                              const wind = hour.windspeed || 2;
-                              const solarMJ =
-                                hour.solarradiation !== undefined
-                                  ? (hour.solarradiation * 3600) / 1e6
-                                  : null;
-                              const etoHourly =
-                                temp !== undefined &&
-                                humidityClamped !== undefined &&
-                                solarMJ !== null
-                                  ? calculateHourlyETo({
-                                      temp,
-                                      humidity: humidityClamped,
-                                      windSpeed: wind,
-                                      solarRadiation: solarMJ,
-                                      altitude: 100,
-                                    })
-                                  : null;
-                              const vpdValue =
-                                temp !== undefined && humidityClamped !== undefined
-                                  ? calcVPD(temp, humidityClamped)
-                                  : null;
-                              return (
-                                <tr key={hour.datetime}>
-                                  <td>
-                                    {hour.datetimeEpoch
-                                      ? new Date(
-                                          hour.datetimeEpoch * 1000
-                                        ).toLocaleTimeString([], {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
-                                      : t_.notSpecified}
-                                  </td>
-                                  <td>
-                                    {temp !== undefined ? temp.toFixed(1) : t_.notSpecified}
-                                  </td>
-                                  <td>
-                                    {humidityClamped !== undefined
-                                      ? humidityClamped.toFixed(0)
-                                      : t_.notSpecified}
-                                  </td>
-                                  <td>
-                                    {solarMJ !== null ? solarMJ.toFixed(2) : t_.notSpecified}
-                                  </td>
-                                  <td>
-                                    {wind !== undefined ? wind.toFixed(1) : t_.notSpecified}
-                                  </td>
-                                  <td>
-                                    {vpdValue !== null
-                                      ? vpdValue
-                                      : t_.notSpecified}
-                                  </td>
-                                  <td>
-                                    {etoHourly !== null
-                                      ? etoHourly.toFixed(3)
-                                      : t_.notSpecified}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* สรุป Climate Scenario */}
-                      <div style={{ marginTop: 10, fontWeight: "bold" }}>
-                        <div>
-                          {t_.dailyEto}: {
-                            // รวม ETo รายวัน (Climate Scenario)
-                            (() => {
-                              const sum = hourlyData.reduce((acc, hour) => {
-                                const temp = hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
-                                const humidity = hour.humidity !== undefined ? hour.humidity + climateHumidityDelta : undefined;
-                                const humidityClamped = humidity !== undefined ? Math.max(0, Math.min(100, humidity)) : undefined;
-                                const wind = hour.windspeed || 2;
-                                const solarMJ =
-                                  hour.solarradiation !== undefined
-                                    ? (hour.solarradiation * 3600) / 1e6
-                                    : null;
-                                const etoHourly =
-                                  temp !== undefined &&
-                                  humidityClamped !== undefined &&
-                                  solarMJ !== null
-                                    ? calculateHourlyETo({
-                                        temp,
-                                        humidity: humidityClamped,
-                                        windSpeed: wind,
-                                        solarRadiation: solarMJ,
-                                        altitude: 100,
-                                      })
-                                    : null;
-                                return etoHourly !== null ? acc + etoHourly : acc;
-                              }, 0);
-                              return sum.toFixed(3);
-                            })()
-                          } mm
-                        </div>
-                        <div>
-                          {t_.rainfall}: {rainfall !== null ? `${rainfall} mm` : t_.notSpecified}
-                        </div>
-                        <div>
-                          {t_.etc}: {
-                            // ETc (พืชใช้น้ำ) (Climate Scenario)
-                            (() => {
-                              const etoSum = hourlyData.reduce((acc, hour) => {
-                                const temp = hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
-                                const humidity = hour.humidity !== undefined ? hour.humidity + climateHumidityDelta : undefined;
-                                const humidityClamped = humidity !== undefined ? Math.max(0, Math.min(100, humidity)) : undefined;
-                                const wind = hour.windspeed || 2;
-                                const solarMJ =
-                                  hour.solarradiation !== undefined
-                                    ? (hour.solarradiation * 3600) / 1e6
-                                    : null;
-                                const etoHourly =
-                                  temp !== undefined &&
-                                  humidityClamped !== undefined &&
-                                  solarMJ !== null
-                                    ? calculateHourlyETo({
-                                        temp,
-                                        humidity: humidityClamped,
-                                        windSpeed: wind,
-                                        solarRadiation: solarMJ,
-                                        altitude: 100,
-                                      })
-                                    : null;
-                                return etoHourly !== null ? acc + etoHourly : acc;
-                              }, 0);
-                              return kc?.value !== undefined
-                                ? `${(etoSum * kc.value).toFixed(3)} mm/day`
-                                : t_.notSpecified;
-                            })()
-                          }
-                        </div>
-                        <div style={{ color: "red" }}>
-                          {t_.netWater}: {climateScenarioWaterNetPerTree} {t_.litersPerTree}
+                      {/* Climate Scenario Controls & Summary */}
+                      <div style={{ marginTop: 20 }}>
+                        <div style={{ color: "red", fontWeight: "bold", fontSize: "1.1em" }}>
+                          Climate Scenario ทำให้มีการเปลี่ยนแปลง&nbsp;
+                          <label>
+                            อุณหภูมิ&nbsp;
+                            <input
+                              type="number"
+                              value={climateTempDelta}
+                              onChange={e => setClimateTempDelta(Number(e.target.value))}
+                              style={{ width: 60, color: "red", borderColor: "red" }}
+                            />
+                            &nbsp;°C&nbsp;
+                          </label>
+                          กับ&nbsp;
+                          <label>
+                            ความชื้น&nbsp;
+                            <input
+                              type="number"
+                              value={climateHumidityDelta}
+                              onChange={e => setClimateHumidityDelta(Number(e.target.value))}
+                              style={{ width: 60, color: "red", borderColor: "red" }}
+                            />
+                            &nbsp;%&nbsp;
+                          </label>
+                          ทำให้ปริมาณน้ำสุทธิที่ต้องให้น้ำเอง = {climateScenarioWaterNetPerTree} {t_.litersPerTree}
                         </div>
                       </div>
                     </>
