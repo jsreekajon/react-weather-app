@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Select from "react-select";
 import { db } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
@@ -71,7 +71,19 @@ const translations = {
   },
 };
 
-const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
+const API_KEYS = [
+  "8GEWAKR6AXWDET8C3DVV787XW", // key1
+  "W5VMZDF42HAR6S9RJTSLX2MJY", // key2
+  "D2HBXFV5VCMLAV8U4C32EUUNK" // key3
+];
+let apiKeyIndex = 0;
+function getApiKey() {
+  return API_KEYS[apiKeyIndex];
+}
+function rotateApiKey() {
+  apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
+  return getApiKey();
+}
 
 export default function HomePage() {
   const [user] = useAuthState(auth);
@@ -115,31 +127,59 @@ export default function HomePage() {
     if (defaultKc) setKc(defaultKc);
   }, [plantType]);
 
+  // Debounce & cache
+  const debounceRef = useRef();
   useEffect(() => {
-    const fetchWeather = async () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
       if (!district || !province) return;
       setLoading(true);
       setError(null);
       setWeather(null);
-      try {
-        const today = new Date();
-        const startDate = formatDate(today);
-        const endDate = formatDate(new Date(today.getTime() + 7 * 86400000));
-        const location = `${province.value},TH`;
-        const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
-          location
-        )}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data");
-        const data = await response.json();
-        setWeather(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
+      const today = new Date();
+      const startDate = formatDate(today);
+      const endDate = formatDate(new Date(today.getTime() + 7 * 86400000));
+      const location = `${province.value},TH`;
+      const cacheKey = `weather_${location}_${startDate}_${endDate}_${lang}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setWeather(JSON.parse(cached));
         setLoading(false);
+        return;
       }
-    };
-    fetchWeather();
+      // fetch with API key rotation
+      const fetchWeather = async () => {
+        let tries = 0;
+        let lastError = null;
+        while (tries < API_KEYS.length) {
+          const apiKey = getApiKey();
+          const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
+          try {
+            const response = await fetch(url);
+            if (response.status === 429) {
+              // quota exceeded, rotate key
+              rotateApiKey();
+              tries++;
+              continue;
+            }
+            if (!response.ok) throw new Error(lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data");
+            const data = await response.json();
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+            setWeather(data);
+            setLoading(false);
+            return;
+          } catch (err) {
+            lastError = err;
+            tries++;
+            rotateApiKey();
+          }
+        }
+        setError(lastError ? lastError.message : (lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data"));
+        setLoading(false);
+      };
+      fetchWeather();
+    }, 1000); // 1 วินาที debounce
+    return () => clearTimeout(debounceRef.current);
     // eslint-disable-next-line
   }, [province, district, lang]);
 
@@ -572,13 +612,12 @@ export default function HomePage() {
                     return (
                       <tr key={hour.datetime}>
                         <td>
-                          {hour.datetimeEpoch
-                            ? new Date(
-                                hour.datetimeEpoch * 1000
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
+                          {hour.datetime
+                            ? (() => {
+                                // hour.datetime format: "00:00", "01:00", ...
+                                const parts = hour.datetime.split(":");
+                                return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+                              })()
                             : t_.notSpecified}
                         </td>
                         <td>

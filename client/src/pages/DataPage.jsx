@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
@@ -10,7 +10,19 @@ import { calculateHourlyETo } from "../utils/calculateETo"; // เพิ่ม i
 registerLocale("th", th);
 
 // ✅ เก็บฝั่ง new-data
-const API_KEY = "8GEWAKR6AXWDET8C3DVV787XW";
+const API_KEYS = [
+  "8GEWAKR6AXWDET8C3DVV787XW",
+  "W5VMZDF42HAR6S9RJTSLX2MJY",
+  "D2HBXFV5VCMLAV8U4C32EUUNK"
+];
+let apiKeyIndex = 0;
+function getApiKey() {
+  return API_KEYS[apiKeyIndex];
+}
+function rotateApiKey() {
+  apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
+  return getApiKey();
+}
 
 export default function DataPage() {
   const defaultProvince = Object.keys(provinces)[0];
@@ -47,71 +59,93 @@ export default function DataPage() {
     return `${d}-${m}-${y}`;
   };
 
-  const handleFetch = async () => {
-    if (!province.value || !district.value) return;
-    setLoading(true);
-    setData([]);
-    try {
+  // Debounce & cache
+  const debounceRef = useRef();
+  const handleFetch = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      if (!province.value || !district.value) return;
+      setLoading(true);
+      setData([]);
       // Format start and end date
       const startStr = startDate.toISOString().slice(0, 10);
       const endStr = endDate.toISOString().slice(0, 10);
       const location = `${province.value},TH`;
-      const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
-        location
-      )}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${API_KEY}&contentType=json`;
-
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
-      const json = await res.json();
-
-      // Flatten all hours from all days, add date field
-      const tableData = [];
-      (json.days || []).forEach((day) => {
-        const dateLabel = formatDateThai(day.datetime);
-        (day.hours || []).forEach((row) => {
-          const solarMJ =
-            row.solarradiation !== undefined
-              ? (row.solarradiation * 3600) / 1e6
-              : null;
-          const etoHourly =
-            row.temp !== undefined &&
-            row.humidity !== undefined &&
-            solarMJ !== null
-              ? calculateHourlyETo({
-                  temp: row.temp,
-                  humidity: row.humidity,
-                  windSpeed: row.windspeed ?? 2,
-                  solarRadiation: solarMJ,
-                  altitude: 100,
-                })
-              : null;
-          const vpd =
-            row.temp !== undefined && row.humidity !== undefined
-              ? (
-                  0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
-                  (row.humidity / 100) *
-                    (0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
-                ).toFixed(3)
-              : "";
-          tableData.push({
-            date: dateLabel,
-            hour: row.datetime,
-            temp: row.temp ?? 0,
-            humidity: row.humidity ?? 0,
-            solar: row.solarradiation ?? 0,
-            wind: row.windspeed ?? 0,
-            vpd,
-            eto: etoHourly !== null ? etoHourly.toFixed(3) : "",
+      const cacheKey = `weather_${location}_${startStr}_${endStr}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setData(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
+      let tries = 0;
+      let lastError = null;
+      while (tries < API_KEYS.length) {
+        const apiKey = getApiKey();
+        const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
+        try {
+          const res = await fetch(url);
+          if (res.status === 429) {
+            rotateApiKey();
+            tries++;
+            continue;
+          }
+          if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
+          const json = await res.json();
+          // Flatten all hours from all days, add date field
+          const tableData = [];
+          (json.days || []).forEach((day) => {
+            const dateLabel = formatDateThai(day.datetime);
+            (day.hours || []).forEach((row) => {
+              const solarMJ =
+                row.solarradiation !== undefined
+                  ? (row.solarradiation * 3600) / 1e6
+                  : null;
+              const etoHourly =
+                row.temp !== undefined &&
+                row.humidity !== undefined &&
+                solarMJ !== null
+                  ? calculateHourlyETo({
+                      temp: row.temp,
+                      humidity: row.humidity,
+                      windSpeed: row.windspeed ?? 2,
+                      solarRadiation: solarMJ,
+                      altitude: 100,
+                    })
+                  : null;
+              const vpd =
+                row.temp !== undefined && row.humidity !== undefined
+                  ? (
+                      0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
+                      (row.humidity / 100) *
+                        (0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
+                    ).toFixed(3)
+                  : "";
+              tableData.push({
+                date: dateLabel,
+                hour: row.datetime,
+                temp: row.temp ?? 0,
+                humidity: row.humidity ?? 0,
+                solar: row.solarradiation ?? 0,
+                wind: row.windspeed ?? 0,
+                vpd,
+                eto: etoHourly !== null ? etoHourly.toFixed(3) : "",
+              });
+            });
           });
-        });
-      });
-
-      setData(tableData);
-    } catch (e) {
+          localStorage.setItem(cacheKey, JSON.stringify(tableData));
+          setData(tableData);
+          setLoading(false);
+          return;
+        } catch (e) {
+          lastError = e;
+          tries++;
+          rotateApiKey();
+        }
+      }
       alert("เกิดข้อผิดพลาดในการโหลดข้อมูล");
-    } finally {
       setLoading(false);
-    }
+    }, 1000); // debounce 1 วินาที
   };
 
   const handleExport = () => {
@@ -143,9 +177,7 @@ export default function DataPage() {
   return (
     <div style={{ maxWidth: 900, margin: "30px auto" }}>
       <h2>ค้นหาข้อมูลอากาศ 24 ชั่วโมง (Visual Crossing)</h2>
-      <div
-        style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}
-      >
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 200 }}>
           <label>จังหวัด:</label>
           <Select
@@ -172,7 +204,7 @@ export default function DataPage() {
             isDisabled={!province.value}
           />
         </div>
-        <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <label>วันที่เริ่มต้น:</label>
           <DatePicker
             selected={startDate}
@@ -180,8 +212,6 @@ export default function DataPage() {
             locale="th"
             dateFormat="dd-MM-yyyy"
           />
-        </div>
-        <div>
           <label>วันที่สิ้นสุด:</label>
           <DatePicker
             selected={endDate}
