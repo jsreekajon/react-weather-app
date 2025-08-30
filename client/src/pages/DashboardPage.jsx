@@ -1,5 +1,4 @@
-// src/pages/DashboardPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
@@ -21,32 +20,79 @@ export default function DashboardPage() {
 
   const formatDate = (date) => date.toISOString().split("T")[0];
 
-  // ✅ เพิ่ม fetchData ใน useEffect
+  // Visual Crossing API keys
+  const API_KEYS = [
+    "8GEWAKR6AXWDET8C3DVV787XW",
+    "W5VMZDF42HAR6S9RJTSLX2MJY",
+    "D2HBXFV5VCMLAV8U4C32EUUNK"
+  ];
+  let apiKeyIndex = 0;
+  function getApiKey() {
+    return API_KEYS[apiKeyIndex];
+  }
+  function rotateApiKey() {
+    apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
+    return getApiKey();
+  }
+
+  // Debounce & cache
+  const debounceRef = useRef();
   useEffect(() => {
-    fetchData();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setLoading(true);
+      setErrorMsg("");
+      const start = formatDate(startDate);
+      const end = formatDate(endDate);
+      const location = "Bangkok,TH"; // สามารถปรับจังหวัดได้
+      const cacheKey = `weather_${location}_${start}_${end}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setWeatherData(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
+      let tries = 0;
+      let lastError = null;
+      const fetchData = async () => {
+        while (tries < API_KEYS.length) {
+          const apiKey = getApiKey();
+          const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${start}/${end}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
+          try {
+            const res = await fetch(url);
+            if (res.status === 429) {
+              rotateApiKey();
+              tries++;
+              continue;
+            }
+            if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
+            const json = await res.json();
+            // Flatten all days
+            const tableData = (json.days || []).map(day => ({
+              date: day.datetime,
+              temp: day.temp,
+              humidity: day.humidity,
+              solar: day.solarradiation,
+              wind: day.windspeed
+            }));
+            localStorage.setItem(cacheKey, JSON.stringify(tableData));
+            setWeatherData(tableData);
+            setLoading(false);
+            return;
+          } catch (err) {
+            lastError = err;
+            tries++;
+            rotateApiKey();
+          }
+        }
+        setErrorMsg("ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้");
+        setLoading(false);
+      };
+      fetchData();
+    }, 1000); // debounce 1 วินาที
+    return () => clearTimeout(debounceRef.current);
     // eslint-disable-next-line
   }, [startDate, endDate]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setErrorMsg("");
-    const start = formatDate(startDate);
-    const end = formatDate(endDate);
-
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/weather-range?start=${start}&end=${end}`
-      );
-      if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
-      const data = await res.json();
-      setWeatherData(data);
-    } catch (err) {
-      console.error("❌ Error:", err);
-      setErrorMsg("ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
@@ -71,11 +117,8 @@ export default function DashboardPage() {
             dateFormat="dd-MM-yyyy"
           />
         </div>
-        <button onClick={fetchData} style={{ alignSelf: "end" }}>
-          โหลดข้อมูล
-        </button>
+        {/* Remove the "โหลดข้อมูล" button since useEffect automatically fetches the data */}
       </div>
-
 
       {loading ? (
         <p>⏳ กำลังโหลด...</p>
