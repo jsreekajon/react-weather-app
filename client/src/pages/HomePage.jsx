@@ -4,7 +4,6 @@ import { db } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
 import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
-import VPDDailyChart from "../components/VPDDailyChart";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import { kcOptionsByPlant, plantEn } from "../data/kcOptions";
 import useWeatherAggregator from "../hooks/WeatherDataAggregator";

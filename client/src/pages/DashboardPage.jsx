@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../firebase";
 import useFetchProfile from "../hooks/useFetchProfile";
 import provinces from "../data/provinces";
 import Select from "react-select";
@@ -30,7 +28,6 @@ const yAxisOptions = [
 ];
 
 export default function DashboardPage() {
-  const [user] = useAuthState(auth);
   useFetchProfile();
 
   const defaultProvince = Object.keys(provinces)[0];
@@ -49,7 +46,6 @@ export default function DashboardPage() {
   const [weatherData, setWeatherData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [selectedDay, setSelectedDay] = useState(null);
   const [yAxis, setYAxis] = useState(yAxisOptions[0]);
 
   const formatDate = (date) => date.toISOString().split("T")[0];
@@ -97,7 +93,6 @@ export default function DashboardPage() {
         return getApiKey();
       }
       let tries = 0;
-      let lastError = null;
       const fetchData = async () => {
         while (tries < API_KEYS.length) {
           const apiKey = getApiKey();
@@ -156,7 +151,6 @@ export default function DashboardPage() {
             setLoading(false);
             return;
           } catch (err) {
-            lastError = err;
             tries++;
             rotateApiKey();
           }
@@ -169,12 +163,6 @@ export default function DashboardPage() {
     return () => clearTimeout(debounceRef.current);
     // eslint-disable-next-line
   }, [province, district, startDate, endDate]);
-
-  // สร้างรายการวันที่ให้เลือก
-  const dayList = useMemo(() => {
-    const days = Array.from(new Set(weatherData.map(d => d.date)));
-    return days.map(d => ({ label: d, value: d }));
-  }, [weatherData]);
 
   // กรองข้อมูลเฉพาะช่วงวันที่ที่เลือก
   const filteredHourlyData = useMemo(() => {
