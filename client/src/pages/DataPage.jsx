@@ -79,7 +79,6 @@ export default function DataPage() {
         return;
       }
       let tries = 0;
-      let lastError = null;
       while (tries < API_KEYS.length) {
         const apiKey = getApiKey();
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
@@ -138,7 +137,6 @@ export default function DataPage() {
           setLoading(false);
           return;
         } catch (e) {
-          lastError = e;
           tries++;
           rotateApiKey();
         }
