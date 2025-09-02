@@ -1,39 +1,69 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
 import useFetchProfile from "../hooks/useFetchProfile";
+import provinces from "../data/provinces";
+import Select from "react-select";
+import { calculateHourlyETo } from "../utils/calculateETo";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip
+} from "recharts";
 
 registerLocale("th", th);
 
+const yAxisOptions = [
+  { value: "vpd", label: "VPD (kPa)" },
+  { value: "eto", label: "ETo (mm/hr)" },
+  { value: "temp", label: "อุณหภูมิ (°C)" },
+  { value: "humidity", label: "ความชื้น (%)" },
+  { value: "solar", label: "แสงอาทิตย์ (MJ/m²/hr)" },
+  { value: "wind", label: "ความเร็วลม (km/h)" },
+];
+
 export default function DashboardPage() {
-  const [user] = useAuthState(auth); // ดึงผู้ใช้จาก Firebase Auth
+  const [user] = useAuthState(auth);
   useFetchProfile();
 
+  const defaultProvince = Object.keys(provinces)[0];
+  const defaultDistrict = provinces[defaultProvince][0];
+
+  const [province, setProvince] = useState({
+    label: defaultProvince,
+    value: defaultProvince,
+  });
+  const [district, setDistrict] = useState({
+    label: defaultDistrict,
+    value: defaultDistrict,
+  });
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [weatherData, setWeatherData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [yAxis, setYAxis] = useState(yAxisOptions[0]);
 
   const formatDate = (date) => date.toISOString().split("T")[0];
 
-  // Visual Crossing API keys
-  const API_KEYS = [
-    "8GEWAKR6AXWDET8C3DVV787XW",
-    "W5VMZDF42HAR6S9RJTSLX2MJY",
-    "D2HBXFV5VCMLAV8U4C32EUUNK"
-  ];
-  let apiKeyIndex = 0;
-  function getApiKey() {
-    return API_KEYS[apiKeyIndex];
-  }
-  function rotateApiKey() {
-    apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
-    return getApiKey();
-  }
+  // สร้าง options dropdown
+  const provinceOptions = Object.keys(provinces).map((prov) => ({
+    label: prov,
+    value: prov,
+  }));
+  const districtOptions =
+    provinces[province.value]?.map((dist) => ({
+      label: dist,
+      value: dist,
+    })) || [];
 
   // Debounce & cache
   const debounceRef = useRef();
@@ -42,15 +72,29 @@ export default function DashboardPage() {
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       setErrorMsg("");
+      setWeatherData([]);
       const start = formatDate(startDate);
       const end = formatDate(endDate);
-      const location = "Bangkok,TH"; // สามารถปรับจังหวัดได้
+      const location = `${province.value},TH`;
       const cacheKey = `weather_${location}_${start}_${end}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         setWeatherData(JSON.parse(cached));
         setLoading(false);
         return;
+      }
+      const API_KEYS = [
+        "8GEWAKR6AXWDET8C3DVV787XW",
+        "W5VMZDF42HAR6S9RJTSLX2MJY",
+        "D2HBXFV5VCMLAV8U4C32EUUNK"
+      ];
+      let apiKeyIndex = 0;
+      function getApiKey() {
+        return API_KEYS[apiKeyIndex];
+      }
+      function rotateApiKey() {
+        apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
+        return getApiKey();
       }
       let tries = 0;
       let lastError = null;
@@ -67,14 +111,46 @@ export default function DashboardPage() {
             }
             if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
             const json = await res.json();
-            // Flatten all days
-            const tableData = (json.days || []).map(day => ({
-              date: day.datetime,
-              temp: day.temp,
-              humidity: day.humidity,
-              solar: day.solarradiation,
-              wind: day.windspeed
-            }));
+            // Flatten all hours from all days, add date field
+            const tableData = [];
+            (json.days || []).forEach((day) => {
+              (day.hours || []).forEach((row) => {
+                const solarMJ =
+                  row.solarradiation !== undefined
+                    ? (row.solarradiation * 3600) / 1e6
+                    : null;
+                const etoHourly =
+                  row.temp !== undefined &&
+                  row.humidity !== undefined &&
+                  solarMJ !== null
+                    ? calculateHourlyETo({
+                        temp: row.temp,
+                        humidity: row.humidity,
+                        windSpeed: row.windspeed ?? 2,
+                        solarRadiation: solarMJ,
+                        altitude: 100,
+                      })
+                    : null;
+                const vpd =
+                  row.temp !== undefined && row.humidity !== undefined
+                    ? (
+                        0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
+                        (row.humidity / 100) *
+                          (0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
+                      ).toFixed(3)
+                    : "";
+                tableData.push({
+                  date: day.datetime,
+                  time: row.datetime,
+                  temp: row.temp ?? 0,
+                  humidity: row.humidity ?? 0,
+                  solar: solarMJ !== null ? parseFloat(solarMJ.toFixed(2)) : 0,
+                  wind: row.windspeed ?? 0,
+                  vpd: vpd !== "" ? parseFloat(vpd) : null,
+                  eto: etoHourly !== null ? parseFloat(etoHourly.toFixed(3)) : null,
+                });
+              });
+            });
             localStorage.setItem(cacheKey, JSON.stringify(tableData));
             setWeatherData(tableData);
             setLoading(false);
@@ -92,72 +168,135 @@ export default function DashboardPage() {
     }, 1000); // debounce 1 วินาที
     return () => clearTimeout(debounceRef.current);
     // eslint-disable-next-line
-  }, [startDate, endDate]);
+  }, [province, district, startDate, endDate]);
+
+  // สร้างรายการวันที่ให้เลือก
+  const dayList = useMemo(() => {
+    const days = Array.from(new Set(weatherData.map(d => d.date)));
+    return days.map(d => ({ label: d, value: d }));
+  }, [weatherData]);
+
+  // กรองข้อมูลเฉพาะช่วงวันที่ที่เลือก
+  const filteredHourlyData = useMemo(() => {
+    const start = formatDate(startDate);
+    const end = formatDate(endDate);
+    return weatherData.filter(d => d.date >= start && d.date <= end);
+  }, [weatherData, startDate, endDate]);
+
+  // Custom Tooltip สำหรับกราฟ
+  function CustomTooltip({ active, payload, label }) {
+    if (active && payload && payload.length > 0) {
+      const data = payload[0].payload;
+      // แปลงวันที่เป็น วัน เดือน ปี
+      const [year, month, day] = (data.date || "").split("-");
+      const dateText = day && month && year ? `${day}-${month}-${year}` : data.date || "";
+      return (
+        <div style={{ background: "#fff", border: "1px solid #ccc", padding: 8 }}>
+          <div>วันที่: {dateText}</div>
+          <div>เวลา: {data.time}</div>
+          <div>
+            {payload[0].name}: {payload[0].value}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
-      <h2>แสดงข้อมูลพยากรณ์อากาศ</h2>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-        <div>
+      <h2>กราฟข้อมูลอากาศรายชั่วโมง</h2>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+        <div style={{ minWidth: 200 }}>
+          <label>จังหวัด:</label>
+          <Select
+            options={provinceOptions}
+            value={province}
+            onChange={(option) => {
+              setProvince(option);
+              const firstDistrict = provinces[option.value]?.[0];
+              setDistrict({
+                label: firstDistrict,
+                value: firstDistrict,
+              });
+            }}
+            isSearchable
+          />
+        </div>
+        <div style={{ minWidth: 200 }}>
+          <label>อำเภอ:</label>
+          <Select
+            options={districtOptions}
+            value={district}
+            onChange={setDistrict}
+            isSearchable
+            isDisabled={!province.value}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <label>วันที่เริ่มต้น:</label>
           <DatePicker
             selected={startDate}
-            onChange={(d) => setStartDate(d)}
+            onChange={setStartDate}
             locale="th"
             dateFormat="dd-MM-yyyy"
           />
-        </div>
-        <div>
           <label>วันที่สิ้นสุด:</label>
           <DatePicker
             selected={endDate}
-            onChange={(d) => setEndDate(d)}
+            onChange={setEndDate}
             locale="th"
             dateFormat="dd-MM-yyyy"
           />
         </div>
-        {/* Remove the "โหลดข้อมูล" button since useEffect automatically fetches the data */}
+        <div style={{ minWidth: 200 }}>
+          <label>เลือกแกน y:</label>
+          <Select
+            options={yAxisOptions}
+            value={yAxis}
+            onChange={setYAxis}
+          />
+        </div>
       </div>
 
       {loading ? (
         <p>⏳ กำลังโหลด...</p>
       ) : errorMsg ? (
         <p style={{ color: "red" }}>{errorMsg}</p>
-      ) : weatherData.length === 0 ? (
+      ) : filteredHourlyData.length === 0 ? (
         <p>ไม่พบข้อมูลในช่วงที่เลือก</p>
       ) : (
-        <table border="1" cellPadding={8} style={{ width: "100%" }}>
-          <thead>
-            <tr>
-              <th>วันที่</th>
-              <th>อุณหภูมิ (°C)</th>
-              <th>ความชื้น (%)</th>
-              <th>แสงแดด (W/m²)</th>
-              <th>ลม (km/h)</th>
-              <th>VPD</th>
-            </tr>
-          </thead>
-          <tbody>
-            {weatherData.map((item, i) => {
-              const svp =
-                0.6108 * Math.exp((17.27 * item.temp) / (item.temp + 237.3));
-              const avp = (item.humidity / 100) * svp;
-              const vpd = (svp - avp).toFixed(3);
-
-              return (
-                <tr key={i}>
-                  <td>{new Date(item.date).toLocaleDateString("th-TH")}</td>
-                  <td>{item.temp}</td>
-                  <td>{item.humidity}</td>
-                  <td>{item.solar}</td>
-                  <td>{item.wind}</td>
-                  <td>{vpd}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <>
+          {/* กราฟ */}
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart
+              data={filteredHourlyData}
+              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="time" label={{ value: "เวลา", position: "insideBottom", offset: -5 }} />
+              <YAxis
+                label={{
+                  value: yAxis.label,
+                  angle: -90,
+                  position: "insideLeft",
+                  offset: 10,
+                }}
+                domain={yAxis.value === "humidity" ? [0, 100] : undefined}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Line
+                type="monotone"
+                dataKey={yAxis.value}
+                stroke="#ff7300"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                name={yAxis.label}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </>
       )}
     </div>
   );
