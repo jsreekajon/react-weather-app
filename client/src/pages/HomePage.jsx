@@ -22,6 +22,7 @@ import {
   CartesianGrid,
   Tooltip
 } from "recharts";
+import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 
 // เพิ่มอ็อบเจ็กต์ข้อความสองภาษา
 const translations = {
@@ -108,6 +109,7 @@ function rotateApiKey() {
 export default function HomePage() {
   const [user] = useAuthState(auth);
   useFetchProfile();
+  const { lang, setLang } = useLanguage(); // ใช้ context
 
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
@@ -131,7 +133,6 @@ export default function HomePage() {
   const [canopyRadius, setCanopyRadius] = useState(1);
   const [plantType, setPlantType] = useState("ทุเรียน");
   const [kc, setKc] = useState(kcOptionsByPlant[plantType]?.[0]);
-  const [lang, setLang] = useState("th");
   const t_ = translations[lang];
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
@@ -285,7 +286,7 @@ export default function HomePage() {
   };
   const formatDateEn = (isoDate) => {
     const [y, m, d] = isoDate.split("-");
-    return `${y}-${m}-${d}`;
+    return `${d}-${m}-${y}`;
   };
 
   const dayOptions =

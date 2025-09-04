@@ -6,6 +6,9 @@ import provinces from "../data/provinces";
 import * as XLSX from "xlsx";
 import Select from "react-select";
 import { calculateHourlyETo } from "../utils/calculateETo"; // เพิ่ม import
+import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
+import provinceEn from "../data/provinceEn"; // เพิ่ม
+import districtEn from "../data/districtEn"; // เพิ่ม
 
 registerLocale("th", th);
 
@@ -41,8 +44,69 @@ export default function DataPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const getProvinceLabel = (prov) => prov;
-  const getDistrictLabel = (prov, dist) => dist;
+  const { lang, setLang } = useLanguage(); // ใช้ context
+
+  // เพิ่ม translations สำหรับทุกข้อความ
+  const translations = {
+    th: {
+      langBtn: "EN",
+      title: "ค้นหาข้อมูลอากาศ 24 ชั่วโมง (Visual Crossing)",
+      province: "จังหวัด:",
+      district: "อำเภอ:",
+      startDate: "วันที่เริ่มต้น:",
+      endDate: "วันที่สิ้นสุด:",
+      search: "ค้นหา",
+      export: "Export Excel",
+      loading: "กำลังโหลดข้อมูล...",
+      notFound: "ไม่พบข้อมูลในช่วงที่เลือก",
+      table: {
+        date: "วันที่",
+        time: "เวลา",
+        temp: "อุณหภูมิ (°C)",
+        humidity: "ความชื้น (%)",
+        solar: "แสงอาทิตย์ (MJ/m²/hr)",
+        wind: "ความเร็วลม (km/h)",
+        vpd: "VPD (kPa)",
+        eto: "ETo (mm/hr)",
+      },
+      error: "เกิดข้อผิดพลาดในการโหลดข้อมูล",
+    },
+    en: {
+      langBtn: "TH",
+      title: "Search 24-hour Weather Data (Visual Crossing)",
+      province: "Province:",
+      district: "District:",
+      startDate: "Start date:",
+      endDate: "End date:",
+      search: "Search",
+      export: "Export Excel",
+      loading: "Loading...",
+      notFound: "No data found in selected range",
+      table: {
+        date: "Date",
+        time: "Time",
+        temp: "Temperature (°C)",
+        humidity: "Humidity (%)",
+        solar: "Solar (MJ/m²/hr)",
+        wind: "Wind speed (km/h)",
+        vpd: "VPD (kPa)",
+        eto: "ETo (mm/hr)",
+      },
+      error: "Failed to load data",
+    },
+  };
+  const t_ = translations[lang];
+
+  const getProvinceLabel = (prov) =>
+    lang === "en" ? provinceEn[prov] || prov : prov;
+
+  const getDistrictLabel = (prov, dist) => {
+    if (lang === "en") {
+      const provEn = provinceEn[prov] || prov;
+      return districtEn[provEn]?.[dist] || dist;
+    }
+    return dist;
+  };
 
   const provinceOptions = Object.keys(provinces).map((prov) => ({
     label: getProvinceLabel(prov),
@@ -55,6 +119,11 @@ export default function DataPage() {
     })) || [];
 
   const formatDateThai = (isoDate) => {
+    const [y, m, d] = isoDate.split("-");
+    return `${d}-${m}-${y}`;
+  };
+
+  const formatDateEn = (isoDate) => {
     const [y, m, d] = isoDate.split("-");
     return `${d}-${m}-${y}`;
   };
@@ -94,7 +163,7 @@ export default function DataPage() {
           // Flatten all hours from all days, add date field
           const tableData = [];
           (json.days || []).forEach((day) => {
-            const dateLabel = formatDateThai(day.datetime);
+            const dateLabel = lang === "en" ? formatDateEn(day.datetime) : formatDateThai(day.datetime);
             (day.hours || []).forEach((row) => {
               const solarMJ =
                 row.solarradiation !== undefined
@@ -174,18 +243,27 @@ export default function DataPage() {
 
   return (
     <div style={{ maxWidth: 900, margin: "30px auto" }}>
-      <h2>ค้นหาข้อมูลอากาศ 24 ชั่วโมง (Visual Crossing)</h2>
+      <button
+        style={{ float: "right", marginTop: 10 }}
+        onClick={() => setLang(lang === "th" ? "en" : "th")}
+      >
+        {t_.langBtn}
+      </button>
+      <h2>{t_.title}</h2>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 200 }}>
-          <label>จังหวัด:</label>
+          <label>{t_.province}</label>
           <Select
             options={provinceOptions}
-            value={province}
+            value={{
+              label: getProvinceLabel(province.value),
+              value: province.value,
+            }}
             onChange={(option) => {
               setProvince(option);
               const firstDistrict = provinces[option.value]?.[0];
               setDistrict({
-                label: firstDistrict,
+                label: getDistrictLabel(option.value, firstDistrict),
                 value: firstDistrict,
               });
             }}
@@ -193,44 +271,47 @@ export default function DataPage() {
           />
         </div>
         <div style={{ minWidth: 200 }}>
-          <label>อำเภอ:</label>
+          <label>{t_.district}</label>
           <Select
             options={districtOptions}
-            value={district}
+            value={{
+              label: getDistrictLabel(province.value, district.value),
+              value: district.value,
+            }}
             onChange={setDistrict}
             isSearchable
             isDisabled={!province.value}
           />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <label>วันที่เริ่มต้น:</label>
+          <label>{t_.startDate}</label>
           <DatePicker
             selected={startDate}
             onChange={setStartDate}
-            locale="th"
-            dateFormat="dd-MM-yyyy"
+            locale={lang}
+            dateFormat={lang === "th" ? "dd-MM-yyyy" : "dd-MM-yyyy"}
           />
-          <label>วันที่สิ้นสุด:</label>
+          <label>{t_.endDate}</label>
           <DatePicker
             selected={endDate}
             onChange={setEndDate}
-            locale="th"
-            dateFormat="dd-MM-yyyy"
+            locale={lang}
+            dateFormat={lang === "th" ? "dd-MM-yyyy" : "dd-MM-yyyy"}
           />
         </div>
         <button onClick={handleFetch} style={{ alignSelf: "end" }}>
-          ค้นหา
+          {t_.search}
         </button>
         <button
           onClick={handleExport}
           style={{ alignSelf: "end" }}
           disabled={!data.length}
         >
-          Export Excel
+          {t_.export}
         </button>
       </div>
       {loading ? (
-        <p>กำลังโหลดข้อมูล...</p>
+        <p>{t_.loading}</p>
       ) : data.length ? (
         <table
           border="1"
@@ -239,14 +320,14 @@ export default function DataPage() {
         >
           <thead>
             <tr>
-              <th>วันที่</th>
-              <th>เวลา</th>
-              <th>อุณหภูมิ (°C)</th>
-              <th>ความชื้น (%)</th>
-              <th>แสงอาทิตย์ (MJ/m²/hr)</th>
-              <th>ความเร็วลม (km/h)</th>
-              <th>VPD (kPa)</th>
-              <th>ETo (mm/hr)</th>
+              <th>{t_.table.date}</th>
+              <th>{t_.table.time}</th>
+              <th>{t_.table.temp}</th>
+              <th>{t_.table.humidity}</th>
+              <th>{t_.table.solar}</th>
+              <th>{t_.table.wind}</th>
+              <th>{t_.table.vpd}</th>
+              <th>{t_.table.eto}</th>
             </tr>
           </thead>
           <tbody>
@@ -286,6 +367,7 @@ export default function DataPage() {
           </tbody>
         </table>
       ) : null}
+      {!loading && !data.length && <p>{t_.notFound}</p>}
     </div>
   );
 }
