@@ -4,6 +4,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
 import useFetchProfile from "../hooks/useFetchProfile";
 import provinces from "../data/provinces";
+import provinceEn from "../data/provinceEn"; // เพิ่ม
+import districtEn from "../data/districtEn"; // เพิ่ม
 import Select from "react-select";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import {
@@ -15,20 +17,25 @@ import {
   CartesianGrid,
   Tooltip
 } from "recharts";
+import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 
 registerLocale("th", th);
 
-const yAxisOptions = [
-  { value: "vpd", label: "VPD (kPa)" },
-  { value: "eto", label: "ETo (mm/hr)" },
-  { value: "temp", label: "อุณหภูมิ (°C)" },
-  { value: "humidity", label: "ความชื้น (%)" },
-  { value: "solar", label: "แสงอาทิตย์ (MJ/m²/hr)" },
-  { value: "wind", label: "ความเร็วลม (km/h)" },
-];
+function getYAxisOptions(currentLang) {
+  const isEn = currentLang === "en";
+  return [
+    { value: "vpd", label: isEn ? "VPD (kPa)" : "VPD (kPa)" },
+    { value: "eto", label: isEn ? "ETo (mm/hr)" : "ETo (mm/hr)" },
+    { value: "temp", label: isEn ? "Temperature (°C)" : "อุณหภูมิ (°C)" },
+    { value: "humidity", label: isEn ? "Humidity (%)" : "ความชื้น (%)" },
+    { value: "solar", label: isEn ? "Solar (MJ/m²/hr)" : "แสงอาทิตย์ (MJ/m²/hr)" },
+    { value: "wind", label: isEn ? "Wind speed (km/h)" : "ความเร็วลม (km/h)" },
+  ];
+}
 
 export default function DashboardPage() {
   useFetchProfile();
+  const { lang, setLang } = useLanguage(); // ใช้ context
 
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
@@ -46,18 +53,70 @@ export default function DashboardPage() {
   const [weatherData, setWeatherData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [yAxis, setYAxis] = useState(yAxisOptions[0]);
+  const [yAxis, setYAxis] = useState(getYAxisOptions(lang)[0]);
+
+  // อัปเดต label ของ yAxis ตามภาษา แต่คงค่า value เดิม
+  useEffect(() => {
+    const options = getYAxisOptions(lang);
+    setYAxis((prev) => options.find((opt) => opt.value === prev?.value) || options[0]);
+  }, [lang]);
+
+  // เพิ่ม translations สำหรับปุ่มภาษา
+  const translations = {
+    th: {
+      langBtn: "EN",
+      title: "กราฟข้อมูลอากาศรายชั่วโมง",
+      province: "จังหวัด:",
+      district: "อำเภอ:",
+      startDate: "วันที่เริ่มต้น:",
+      endDate: "วันที่สิ้นสุด:",
+      yAxis: "เลือกแกน y:",
+      loading: "⏳ กำลังโหลด...",
+      error: "ไม่สามารถโหลดข้อมูลจากเซิร์ฟเวอร์ได้",
+      notFound: "ไม่พบข้อมูลในช่วงที่เลือก",
+      chartTime: "เวลา",
+      dateLabel: "วันที่",
+      timeLabel: "เวลา",
+    },
+    en: {
+      langBtn: "TH",
+      title: "Hourly Weather Data Chart",
+      province: "Province:",
+      district: "District:",
+      startDate: "Start date:",
+      endDate: "End date:",
+      yAxis: "Select y axis:",
+      loading: "⏳ Loading...",
+      error: "Failed to load data from server",
+      notFound: "No data found in selected range",
+      chartTime: "Time",
+      dateLabel: "Date",
+      timeLabel: "Time",
+    },
+  };
+  const t_ = translations[lang];
 
   const formatDate = (date) => date.toISOString().split("T")[0];
 
+  const getProvinceLabel = (prov) =>
+    lang === "en" ? provinceEn[prov] || prov : prov;
+
+  const getDistrictLabel = (prov, dist) => {
+    if (lang === "en") {
+      const provEn = provinceEn[prov] || prov;
+      return districtEn[provEn]?.[dist] || dist;
+    }
+    return dist;
+  };
+
   // สร้าง options dropdown
   const provinceOptions = Object.keys(provinces).map((prov) => ({
-    label: prov,
+    label: getProvinceLabel(prov),
     value: prov,
   }));
   const districtOptions =
     provinces[province.value]?.map((dist) => ({
-      label: dist,
+      label: getDistrictLabel(province.value, dist),
       value: dist,
     })) || [];
 
@@ -180,8 +239,8 @@ export default function DashboardPage() {
       const dateText = day && month && year ? `${day}-${month}-${year}` : data.date || "";
       return (
         <div style={{ background: "#fff", border: "1px solid #ccc", padding: 8 }}>
-          <div>วันที่: {dateText}</div>
-          <div>เวลา: {data.time}</div>
+          <div>{t_.dateLabel}: {dateText}</div>
+          <div>{t_.timeLabel}: {data.time}</div>
           <div>
             {payload[0].name}: {payload[0].value}
           </div>
@@ -193,18 +252,27 @@ export default function DashboardPage() {
 
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
-      <h2>กราฟข้อมูลอากาศรายชั่วโมง</h2>
+      <button
+        style={{ float: "right", marginTop: 10 }}
+        onClick={() => setLang(lang === "th" ? "en" : "th")}
+      >
+        {t_.langBtn}
+      </button>
+      <h2>{t_.title}</h2>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ minWidth: 200 }}>
-          <label>จังหวัด:</label>
+          <label>{t_.province}</label>
           <Select
             options={provinceOptions}
-            value={province}
+            value={{
+              label: getProvinceLabel(province.value),
+              value: province.value,
+            }}
             onChange={(option) => {
               setProvince(option);
               const firstDistrict = provinces[option.value]?.[0];
               setDistrict({
-                label: firstDistrict,
+                label: getDistrictLabel(option.value, firstDistrict),
                 value: firstDistrict,
               });
             }}
@@ -212,47 +280,49 @@ export default function DashboardPage() {
           />
         </div>
         <div style={{ minWidth: 200 }}>
-          <label>อำเภอ:</label>
+          <label>{t_.district}</label>
           <Select
             options={districtOptions}
-            value={district}
+            value={{
+              label: getDistrictLabel(province.value, district.value),
+              value: district.value,
+            }}
             onChange={setDistrict}
             isSearchable
             isDisabled={!province.value}
           />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <label>วันที่เริ่มต้น:</label>
+          <label>{t_.startDate}</label>
           <DatePicker
             selected={startDate}
             onChange={setStartDate}
-            locale="th"
-            dateFormat="dd-MM-yyyy"
+            locale={lang}
+            dateFormat={lang === "th" ? "dd-MM-yyyy" : "dd-MM-yyyy"}
           />
-          <label>วันที่สิ้นสุด:</label>
+          <label>{t_.endDate}</label>
           <DatePicker
             selected={endDate}
             onChange={setEndDate}
-            locale="th"
-            dateFormat="dd-MM-yyyy"
+            locale={lang}
+            dateFormat={lang === "th" ? "dd-MM-yyyy" : "dd-MM-yyyy"}
           />
         </div>
         <div style={{ minWidth: 200 }}>
-          <label>เลือกแกน y:</label>
+          <label>{t_.yAxis}</label>
           <Select
-            options={yAxisOptions}
+            options={getYAxisOptions(lang)}
             value={yAxis}
             onChange={setYAxis}
           />
         </div>
       </div>
-
       {loading ? (
-        <p>⏳ กำลังโหลด...</p>
+        <p>{t_.loading}</p>
       ) : errorMsg ? (
-        <p style={{ color: "red" }}>{errorMsg}</p>
+        <p style={{ color: "red" }}>{t_.error}</p>
       ) : filteredHourlyData.length === 0 ? (
-        <p>ไม่พบข้อมูลในช่วงที่เลือก</p>
+        <p>{t_.notFound}</p>
       ) : (
         <>
           {/* กราฟ */}
@@ -262,7 +332,7 @@ export default function DashboardPage() {
               margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" label={{ value: "เวลา", position: "insideBottom", offset: -5 }} />
+              <XAxis dataKey="time" label={{ value: t_.chartTime, position: "insideBottom", offset: -5 }} />
               <YAxis
                 label={{
                   value: yAxis.label,
