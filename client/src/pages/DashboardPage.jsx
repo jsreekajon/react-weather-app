@@ -96,7 +96,12 @@ export default function DashboardPage() {
   };
   const t_ = translations[lang];
 
-  const formatDate = (date) => date.toISOString().split("T")[0];
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   const getProvinceLabel = (prov) =>
     lang === "en" ? provinceEn[prov] || prov : prov;
@@ -128,9 +133,14 @@ export default function DashboardPage() {
       setLoading(true);
       setErrorMsg("");
       setWeatherData([]);
-      const start = formatDate(startDate);
-      const end = formatDate(endDate);
-      const location = `${province.value},TH`;
+      // Normalize date range to ensure start <= end
+      const startD = new Date(startDate);
+      const endD = new Date(endDate);
+      const startFirst = startD <= endD ? startD : endD;
+      const endLast = startD <= endD ? endD : startD;
+      const start = formatDate(startFirst);
+      const end = formatDate(endLast);
+      const location = `${district.value},${province.value},TH`;
       const cacheKey = `weather_${location}_${start}_${end}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
