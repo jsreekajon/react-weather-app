@@ -5,10 +5,11 @@ import th from "date-fns/locale/th";
 import provinces from "../data/provinces";
 import * as XLSX from "xlsx";
 import Select from "react-select";
-import { calculateHourlyETo } from "../utils/calculateETo"; // เพิ่ม import
-import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
-import provinceEn from "../data/provinceEn"; // เพิ่ม
-import districtEn from "../data/districtEn"; // เพิ่ม
+import { calculateHourlyETo } from "../utils/calculateETo";
+import { useLanguage } from "../contexts/LanguageContext";
+import provinceEn from "../data/provinceEn";
+import districtEn from "../data/districtEn";
+import { kcOptionsByPlant, plantEn } from "../data/kcOptions";
 
 registerLocale("th", th);
 
@@ -16,7 +17,7 @@ registerLocale("th", th);
 const API_KEYS = [
   "8GEWAKR6AXWDET8C3DVV787XW",
   "W5VMZDF42HAR6S9RJTSLX2MJY",
-  "D2HBXFV5VCMLAV8U4C32EUUNK"
+  "D2HBXFV5VCMLAV8U4C32EUUNK",
 ];
 let apiKeyIndex = 0;
 function getApiKey() {
@@ -44,7 +45,12 @@ export default function DataPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const { lang, setLang } = useLanguage(); // ใช้ context
+  // Plant type and Kc selection
+  const defaultPlant = Object.keys(kcOptionsByPlant)[0];
+  const [plantType, setPlantType] = useState(defaultPlant);
+  const [kc, setKc] = useState(kcOptionsByPlant[defaultPlant][0]);
+
+  const { lang, setLang } = useLanguage();
 
   // เพิ่ม translations สำหรับทุกข้อความ
   const translations = {
@@ -53,6 +59,8 @@ export default function DataPage() {
       title: "ค้นหาข้อมูลอากาศ 24 ชั่วโมง (Visual Crossing)",
       province: "จังหวัด:",
       district: "อำเภอ:",
+      plant: "ชนิดพืช:",
+      kc: (plant) => `Kc (ระยะพัฒนาการของ ${plant}):`,
       startDate: "วันที่เริ่มต้น:",
       endDate: "วันที่สิ้นสุด:",
       search: "ค้นหา",
@@ -68,6 +76,7 @@ export default function DataPage() {
         wind: "ความเร็วลม (km/h)",
         vpd: "VPD (kPa)",
         eto: "ETo (mm/hr)",
+        etc: "ETc (mm/hr)",
       },
       error: "เกิดข้อผิดพลาดในการโหลดข้อมูล",
     },
@@ -76,6 +85,8 @@ export default function DataPage() {
       title: "Search 24-hour Weather Data (Visual Crossing)",
       province: "Province:",
       district: "District:",
+      plant: "Plant type:",
+      kc: (plant) => `Kc (growth stage of ${plant}):`,
       startDate: "Start date:",
       endDate: "End date:",
       search: "Search",
@@ -91,10 +102,27 @@ export default function DataPage() {
         wind: "Wind speed (km/h)",
         vpd: "VPD (kPa)",
         eto: "ETo (mm/hr)",
+        etc: "ETc (mm/hr)",
       },
       error: "Failed to load data",
     },
   };
+  // Plant dropdown options
+  const getPlantLabel = (plant) =>
+    lang === "en" ? plantEn[plant]?.name || plant : plant;
+  const plantOptions = Object.keys(kcOptionsByPlant).map((key) => ({
+    label: getPlantLabel(key),
+    value: key,
+  }));
+
+  // Kc dropdown options
+  const kcOptions =
+    lang === "en" && plantEn[plantType]?.labelEn
+      ? kcOptionsByPlant[plantType].map((opt, idx) => ({
+          label: plantEn[plantType].labelEn[idx],
+          value: opt.value,
+        }))
+      : kcOptionsByPlant[plantType];
   const t_ = translations[lang];
 
   const getProvinceLabel = (prov) =>
@@ -139,8 +167,9 @@ export default function DataPage() {
       // Format start and end date
       const startStr = startDate.toISOString().slice(0, 10);
       const endStr = endDate.toISOString().slice(0, 10);
-      const location = `${province.value},TH`;
-      const cacheKey = `weather_${location}_${startStr}_${endStr}`;
+      const location = `${district.value},${province.value},TH`;
+      // Include plantType and kc in cache key
+      const cacheKey = `weather_${location}_${startStr}_${endStr}_${plantType}_${kc.value}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         setData(JSON.parse(cached));
@@ -152,18 +181,27 @@ export default function DataPage() {
         const apiKey = getApiKey();
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
         try {
+          // Debug: log the url
+          console.log("Fetching weather data from:", url);
           const res = await fetch(url);
           if (res.status === 429) {
             rotateApiKey();
             tries++;
             continue;
           }
-          if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
+          if (!res.ok) {
+            const errText = await res.text();
+            console.error("API error:", res.status, errText);
+            throw new Error("โหลดข้อมูลล้มเหลว");
+          }
           const json = await res.json();
           // Flatten all hours from all days, add date field
           const tableData = [];
           (json.days || []).forEach((day) => {
-            const dateLabel = lang === "en" ? formatDateEn(day.datetime) : formatDateThai(day.datetime);
+            const dateLabel =
+              lang === "en"
+                ? formatDateEn(day.datetime)
+                : formatDateThai(day.datetime);
             (day.hours || []).forEach((row) => {
               const solarMJ =
                 row.solarradiation !== undefined
@@ -184,10 +222,17 @@ export default function DataPage() {
               const vpd =
                 row.temp !== undefined && row.humidity !== undefined
                   ? (
-                      0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
+                      0.6108 *
+                        Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
                       (row.humidity / 100) *
-                        (0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
+                        (0.6108 *
+                          Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
                     ).toFixed(3)
+                  : "";
+              // Calculate ETc per hour
+              const etcHourly =
+                etoHourly !== null && kc.value !== undefined
+                  ? (etoHourly * kc.value).toFixed(3)
                   : "";
               tableData.push({
                 date: dateLabel,
@@ -198,6 +243,7 @@ export default function DataPage() {
                 wind: row.windspeed ?? 0,
                 vpd,
                 eto: etoHourly !== null ? etoHourly.toFixed(3) : "",
+                etc: etcHourly,
               });
             });
           });
@@ -206,6 +252,7 @@ export default function DataPage() {
           setLoading(false);
           return;
         } catch (e) {
+          console.error("Fetch failed:", e.message);
           tries++;
           rotateApiKey();
         }
@@ -250,7 +297,9 @@ export default function DataPage() {
         {t_.langBtn}
       </button>
       <h2>{t_.title}</h2>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+      <div
+        style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}
+      >
         <div style={{ minWidth: 200 }}>
           <label>{t_.province}</label>
           <Select
@@ -281,6 +330,46 @@ export default function DataPage() {
             onChange={setDistrict}
             isSearchable
             isDisabled={!province.value}
+          />
+        </div>
+        <div style={{ minWidth: 200 }}>
+          <label>{t_.plant}</label>
+          <Select
+            options={plantOptions}
+            value={{
+              label: getPlantLabel(plantType),
+              value: plantType,
+            }}
+            onChange={(option) => {
+              setPlantType(option.value);
+              setKc(kcOptionsByPlant[option.value][0]);
+            }}
+          />
+        </div>
+        <div style={{ minWidth: 250 }}>
+          <label>
+            {t_.kc(
+              lang === "en" ? plantEn[plantType]?.name || plantType : plantType
+            )}
+          </label>
+          <Select
+            options={kcOptions}
+            value={
+              lang === "en" && plantEn[plantType]?.labelEn
+                ? {
+                    label:
+                      plantEn[plantType].labelEn[
+                        kcOptionsByPlant[plantType].findIndex(
+                          (k) => k.value === kc.value
+                        )
+                      ],
+                    value: kc.value,
+                  }
+                : kc
+            }
+            onChange={(option) => {
+              setKc(option);
+            }}
           />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -328,6 +417,7 @@ export default function DataPage() {
               <th>{t_.table.wind}</th>
               <th>{t_.table.vpd}</th>
               <th>{t_.table.eto}</th>
+              <th>{t_.table.etc}</th>
             </tr>
           </thead>
           <tbody>
@@ -361,6 +451,7 @@ export default function DataPage() {
                   <td>{row.wind.toFixed(1)}</td>
                   <td>{row.vpd}</td>
                   <td>{row.eto}</td>
+                  <td>{row.etc}</td>
                 </tr>
               );
             })}
