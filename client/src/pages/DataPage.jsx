@@ -10,14 +10,21 @@ import { useLanguage } from "../contexts/LanguageContext";
 import provinceEn from "../data/provinceEn";
 import districtEn from "../data/districtEn";
 import { kcOptionsByPlant, plantEn } from "../data/kcOptions";
+import provinceCoordinates from "../data/provinceCoordinates";
+
 
 registerLocale("th", th);
 
 // ✅ เก็บฝั่ง new-data
 const API_KEYS = [
-  "8GEWAKR6AXWDET8C3DVV787XW",
-  "W5VMZDF42HAR6S9RJTSLX2MJY",
+  
+ "8GEWAKR6AXWDET8C3DVV787XW", 
+  "W5VMZDF42HAR6S9RJTSLX2MJY", 
   "D2HBXFV5VCMLAV8U4C32EUUNK",
+  "RAC3VSK24LPDLNDJHNX84UA4A",
+  "M9T85BKN7MTSP9MVVKU9TRX6B",
+  "XM8LEEHXGNDNFTK8Q2RGT6DHA"
+
 ];
 let apiKeyIndex = 0;
 function getApiKey() {
@@ -167,7 +174,12 @@ export default function DataPage() {
       // Format start and end date
       const startStr = startDate.toISOString().slice(0, 10);
       const endStr = endDate.toISOString().slice(0, 10);
-      const location = `${district.value},${province.value},TH`;
+
+      const coords = provinceCoordinates[province.value];
+      const location = coords ? `${coords[0]},${coords[1]}` : `${province.value},TH`;
+
+      console.log("province", province ,"coords", coords, "location", location);
+      // const location = `${district.value},${province.value},TH`;
       // Include plantType and kc in cache key
       const cacheKey = `weather_${location}_${startStr}_${endStr}_${plantType}_${kc.value}`;
       const cached = localStorage.getItem(cacheKey);
@@ -180,6 +192,7 @@ export default function DataPage() {
       while (tries < API_KEYS.length) {
         const apiKey = getApiKey();
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
+        console.log(url);
         try {
           // Debug: log the url
           console.log("Fetching weather data from:", url);
