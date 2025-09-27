@@ -180,6 +180,8 @@ export default function DataPage() {
 
       console.log("province", province ,"coords", coords, "location", location);
       // const location = `${district.value},${province.value},TH`;
+
+      
       // Include plantType and kc in cache key
       const cacheKey = `weather_${location}_${startStr}_${endStr}_${plantType}_${kc.value}`;
       const cached = localStorage.getItem(cacheKey);
