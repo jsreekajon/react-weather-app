@@ -18,6 +18,8 @@ import {
   Tooltip,
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
+import provinceCoordinates from "../data/provinceCoordinates";
+
 
 registerLocale("th", th);
 
@@ -145,7 +147,14 @@ export default function DashboardPage() {
       const endLast = startD <= endD ? endD : startD;
       const start = formatDate(startFirst);
       const end = formatDate(endLast);
-      const location = `${district.value},${province.value},TH`;
+      
+      const coords = provinceCoordinates[province.value];
+      const location = coords ? `${coords[0]},${coords[1]}` : `${province.value},TH`;
+
+      console.log("province", province ,"coords", coords, "location", location);
+      // const location = `${district.value},${province.value},TH`;
+
+
       const cacheKey = `weather_${location}_${start}_${end}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {

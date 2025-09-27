@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 
+
 // เพิ่มอ็อบเจ็กต์ข้อความสองภาษา
 const translations = {
   th: {
@@ -163,7 +164,15 @@ export default function HomePage() {
       const today = new Date();
       const startDate = formatDate(today);
       const endDate = formatDate(new Date(today.getTime() + 7 * 86400000));
-      const location = `${province.value},TH`;
+      
+      const coords = provinceCoordinates[province.value];
+      const location = coords ? `${coords[0]},${coords[1]}` : `${province.value},TH`;
+
+      console.log("province", province ,"coords", coords, "location", location);
+      // const location = `${district.value},${province.value},TH`;
+
+
+      
       const cacheKey = `weather_${location}_${startDate}_${endDate}_${lang}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
