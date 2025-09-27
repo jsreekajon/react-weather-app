@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip
+  Tooltip,
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 
@@ -28,7 +28,10 @@ function getYAxisOptions(currentLang) {
     { value: "eto", label: isEn ? "ETo (mm/hr)" : "ETo (mm/hr)" },
     { value: "temp", label: isEn ? "Temperature (°C)" : "อุณหภูมิ (°C)" },
     { value: "humidity", label: isEn ? "Humidity (%)" : "ความชื้น (%)" },
-    { value: "solar", label: isEn ? "Solar (MJ/m²/hr)" : "แสงอาทิตย์ (MJ/m²/hr)" },
+    {
+      value: "solar",
+      label: isEn ? "Solar (MJ/m²/hr)" : "แสงอาทิตย์ (MJ/m²/hr)",
+    },
     { value: "wind", label: isEn ? "Wind speed (km/h)" : "ความเร็วลม (km/h)" },
   ];
 }
@@ -58,7 +61,9 @@ export default function DashboardPage() {
   // อัปเดต label ของ yAxis ตามภาษา แต่คงค่า value เดิม
   useEffect(() => {
     const options = getYAxisOptions(lang);
-    setYAxis((prev) => options.find((opt) => opt.value === prev?.value) || options[0]);
+    setYAxis(
+      (prev) => options.find((opt) => opt.value === prev?.value) || options[0]
+    );
   }, [lang]);
 
   // เพิ่ม translations สำหรับปุ่มภาษา
@@ -151,7 +156,10 @@ export default function DashboardPage() {
       const API_KEYS = [
         "8GEWAKR6AXWDET8C3DVV787XW",
         "W5VMZDF42HAR6S9RJTSLX2MJY",
-        "D2HBXFV5VCMLAV8U4C32EUUNK"
+        "D2HBXFV5VCMLAV8U4C32EUUNK",
+        "RAC3VSK24LPDLNDJHNX84UA4A",
+        "M9T85BKN7MTSP9MVVKU9TRX6B",
+        "XM8LEEHXGNDNFTK8Q2RGT6DHA",
       ];
       let apiKeyIndex = 0;
       function getApiKey() {
@@ -165,7 +173,9 @@ export default function DashboardPage() {
       const fetchData = async () => {
         while (tries < API_KEYS.length) {
           const apiKey = getApiKey();
-          const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${start}/${end}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
+          const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
+            location
+          )}/${start}/${end}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
           try {
             const res = await fetch(url);
             if (res.status === 429) {
@@ -198,9 +208,11 @@ export default function DashboardPage() {
                 const vpd =
                   row.temp !== undefined && row.humidity !== undefined
                     ? (
-                        0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
+                        0.6108 *
+                          Math.exp((17.27 * row.temp) / (row.temp + 237.3)) -
                         (row.humidity / 100) *
-                          (0.6108 * Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
+                          (0.6108 *
+                            Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
                       ).toFixed(3)
                     : "";
                 tableData.push({
@@ -211,7 +223,10 @@ export default function DashboardPage() {
                   solar: solarMJ !== null ? parseFloat(solarMJ.toFixed(2)) : 0,
                   wind: row.windspeed ?? 0,
                   vpd: vpd !== "" ? parseFloat(vpd) : null,
-                  eto: etoHourly !== null ? parseFloat(etoHourly.toFixed(3)) : null,
+                  eto:
+                    etoHourly !== null
+                      ? parseFloat(etoHourly.toFixed(3))
+                      : null,
                 });
               });
             });
@@ -237,7 +252,7 @@ export default function DashboardPage() {
   const filteredHourlyData = useMemo(() => {
     const start = formatDate(startDate);
     const end = formatDate(endDate);
-    return weatherData.filter(d => d.date >= start && d.date <= end);
+    return weatherData.filter((d) => d.date >= start && d.date <= end);
   }, [weatherData, startDate, endDate]);
 
   // Custom Tooltip สำหรับกราฟ
@@ -246,11 +261,18 @@ export default function DashboardPage() {
       const data = payload[0].payload;
       // แปลงวันที่เป็น วัน เดือน ปี
       const [year, month, day] = (data.date || "").split("-");
-      const dateText = day && month && year ? `${day}-${month}-${year}` : data.date || "";
+      const dateText =
+        day && month && year ? `${day}-${month}-${year}` : data.date || "";
       return (
-        <div style={{ background: "#fff", border: "1px solid #ccc", padding: 8 }}>
-          <div>{t_.dateLabel}: {dateText}</div>
-          <div>{t_.timeLabel}: {data.time}</div>
+        <div
+          style={{ background: "#fff", border: "1px solid #ccc", padding: 8 }}
+        >
+          <div>
+            {t_.dateLabel}: {dateText}
+          </div>
+          <div>
+            {t_.timeLabel}: {data.time}
+          </div>
           <div>
             {payload[0].name}: {payload[0].value}
           </div>
@@ -269,7 +291,9 @@ export default function DashboardPage() {
         {t_.langBtn}
       </button>
       <h2>{t_.title}</h2>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+      <div
+        style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}
+      >
         <div style={{ minWidth: 200 }}>
           <label>{t_.province}</label>
           <Select
@@ -342,7 +366,14 @@ export default function DashboardPage() {
               margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" label={{ value: t_.chartTime, position: "insideBottom", offset: -5 }} />
+              <XAxis
+                dataKey="time"
+                label={{
+                  value: t_.chartTime,
+                  position: "insideBottom",
+                  offset: -5,
+                }}
+              />
               <YAxis
                 label={{
                   value: yAxis.label,

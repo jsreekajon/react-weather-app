@@ -20,7 +20,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip
+  Tooltip,
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 
@@ -93,9 +93,12 @@ const translations = {
 };
 
 const API_KEYS = [
-  "8GEWAKR6AXWDET8C3DVV787XW", // key1
-  "W5VMZDF42HAR6S9RJTSLX2MJY", // key2
-  "D2HBXFV5VCMLAV8U4C32EUUNK" // key3
+  "8GEWAKR6AXWDET8C3DVV787XW",
+  "W5VMZDF42HAR6S9RJTSLX2MJY",
+  "D2HBXFV5VCMLAV8U4C32EUUNK",
+  "RAC3VSK24LPDLNDJHNX84UA4A",
+  "M9T85BKN7MTSP9MVVKU9TRX6B",
+  "XM8LEEHXGNDNFTK8Q2RGT6DHA",
 ];
 let apiKeyIndex = 0;
 function getApiKey() {
@@ -174,7 +177,9 @@ export default function HomePage() {
         let lastError = null;
         while (tries < API_KEYS.length) {
           const apiKey = getApiKey();
-          const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
+          const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
+            location
+          )}/${startDate}/${endDate}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
           try {
             const response = await fetch(url);
             if (response.status === 429) {
@@ -183,7 +188,10 @@ export default function HomePage() {
               tries++;
               continue;
             }
-            if (!response.ok) throw new Error(lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data");
+            if (!response.ok)
+              throw new Error(
+                lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data"
+              );
             const data = await response.json();
             localStorage.setItem(cacheKey, JSON.stringify(data));
             setWeather(data);
@@ -195,7 +203,13 @@ export default function HomePage() {
             rotateApiKey();
           }
         }
-        setError(lastError ? lastError.message : (lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data"));
+        setError(
+          lastError
+            ? lastError.message
+            : lang === "th"
+            ? "ไม่สามารถดึงข้อมูลได้"
+            : "Unable to fetch data"
+        );
         setLoading(false);
       };
       fetchWeather();
@@ -251,19 +265,18 @@ export default function HomePage() {
   }, [t, h]);
 
   // ฟังก์ชันแปลงชื่อจังหวัด/อำเภอ/พืช ตามภาษา
-  const getProvinceLabel = (prov) => lang === "en" ? (provinceEn[prov] || prov) : prov;
+  const getProvinceLabel = (prov) =>
+    lang === "en" ? provinceEn[prov] || prov : prov;
   const getDistrictLabel = (prov, dist) => {
     if (lang === "en") {
       // ใช้ provinceEn เพื่อแปลงชื่อจังหวัดไทยเป็นอังกฤษก่อนหาใน districtEn
       const provEn = provinceEn[prov] || prov;
-      return (districtEn[provEn]?.[dist] || dist);
+      return districtEn[provEn]?.[dist] || dist;
     }
     return dist;
   };
   const getPlantLabel = (plant) =>
-    lang === "en"
-      ? (plantEn[plant]?.name || plant)
-      : plant;
+    lang === "en" ? plantEn[plant]?.name || plant : plant;
 
   // สร้าง options dropdown ตามภาษา
   const provinceOptions = Object.keys(provinces).map((prov) => ({
@@ -291,7 +304,10 @@ export default function HomePage() {
 
   const dayOptions =
     weather?.days.map((day) => ({
-      label: lang === "th" ? formatDateThai(day.datetime) : formatDateEn(day.datetime),
+      label:
+        lang === "th"
+          ? formatDateThai(day.datetime)
+          : formatDateEn(day.datetime),
       value: day.datetime,
     })) || [];
 
@@ -427,13 +443,21 @@ export default function HomePage() {
 
   // คำนวณ Climate Scenario
   const climateScenarioWaterNetPerTree = useMemo(() => {
-    if (!weather || !selectedDay || canopyAreaSqM === null || rainfall === null) return null;
+    if (!weather || !selectedDay || canopyAreaSqM === null || rainfall === null)
+      return null;
 
     // รวม ETo รายชั่วโมงแบบ scenario
     const etoSum = hourlyData.reduce((acc, hour) => {
-      const temp = hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
-      const humidity = hour.humidity !== undefined ? hour.humidity + climateHumidityDelta : undefined;
-      const humidityClamped = humidity !== undefined ? Math.max(0, Math.min(100, humidity)) : undefined;
+      const temp =
+        hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
+      const humidity =
+        hour.humidity !== undefined
+          ? hour.humidity + climateHumidityDelta
+          : undefined;
+      const humidityClamped =
+        humidity !== undefined
+          ? Math.max(0, Math.min(100, humidity))
+          : undefined;
       const wind = hour.windspeed || 2;
       const solarMJ =
         hour.solarradiation !== undefined
@@ -441,9 +465,7 @@ export default function HomePage() {
           : null;
 
       const etoHourly =
-        temp !== undefined &&
-        humidityClamped !== undefined &&
-        solarMJ !== null
+        temp !== undefined && humidityClamped !== undefined && solarMJ !== null
           ? calculateHourlyETo({
               temp,
               humidity: humidityClamped,
@@ -472,35 +494,52 @@ export default function HomePage() {
     hourlyData,
   ]);
 
-  function ClimateScenarioVPDChart({ weather, selectedDay, tempDelta, humidityDelta, lang = "th" }) {
+  function ClimateScenarioVPDChart({
+    weather,
+    selectedDay,
+    tempDelta,
+    humidityDelta,
+    lang = "th",
+  }) {
     // สร้างข้อมูล VPD รายชั่วโมงแบบ Climate Scenario
     const hourlyVPDData = useMemo(() => {
       if (!weather?.days || !selectedDay) return [];
       const dayData = weather.days.find((d) => d.datetime === selectedDay);
       if (!dayData?.hours) return [];
-      return dayData.hours.map((hour) => {
-        const tempC = hour.temp !== undefined ? hour.temp + tempDelta : undefined;
-        const humidity = hour.humidity !== undefined ? hour.humidity + humidityDelta : undefined;
-        const humidityClamped = humidity !== undefined ? Math.max(0, Math.min(100, humidity)) : undefined;
-        if (tempC == null || humidityClamped == null) return null;
-        const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
-        const avp = svp * (humidityClamped / 100);
-        const vpd = parseFloat((svp - avp).toFixed(3));
-        return {
-          time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          vpd,
-        };
-      }).filter(Boolean);
+      return dayData.hours
+        .map((hour) => {
+          const tempC =
+            hour.temp !== undefined ? hour.temp + tempDelta : undefined;
+          const humidity =
+            hour.humidity !== undefined
+              ? hour.humidity + humidityDelta
+              : undefined;
+          const humidityClamped =
+            humidity !== undefined
+              ? Math.max(0, Math.min(100, humidity))
+              : undefined;
+          if (tempC == null || humidityClamped == null) return null;
+          const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+          const avp = svp * (humidityClamped / 100);
+          const vpd = parseFloat((svp - avp).toFixed(3));
+          return {
+            time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            vpd,
+          };
+        })
+        .filter(Boolean);
     }, [weather, selectedDay, tempDelta, humidityDelta]);
 
     // ข้อความหัวกราฟสองภาษา
     const chartTitle =
       lang === "en"
         ? "Climate Scenario VPD Chart (Hourly on " + selectedDay + ")"
-        : "กราฟ VPD ของ Climate Scenario (รายชั่วโมงในวันที่ " + selectedDay + ")";
+        : "กราฟ VPD ของ Climate Scenario (รายชั่วโมงในวันที่ " +
+          selectedDay +
+          ")";
     const noDataText = lang === "en" ? "No VPD data" : "ไม่มีข้อมูล VPD";
 
     return (
@@ -516,7 +555,9 @@ export default function HomePage() {
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="time" />
-              <YAxis label={{ value: "kPa", angle: -90, position: "insideLeft" }} />
+              <YAxis
+                label={{ value: "kPa", angle: -90, position: "insideLeft" }}
+              />
               <Tooltip />
               <Line
                 type="monotone"
@@ -538,21 +579,23 @@ export default function HomePage() {
       if (!weather?.days || !selectedDay) return [];
       const dayData = weather.days.find((d) => d.datetime === selectedDay);
       if (!dayData?.hours) return [];
-      return dayData.hours.map((hour) => {
-        const tempC = hour.temp;
-        const humidity = hour.humidity;
-        if (tempC == null || humidity == null) return null;
-        const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
-        const avp = svp * (humidity / 100);
-        const vpd = parseFloat((svp - avp).toFixed(3));
-        return {
-          time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          vpd,
-        };
-      }).filter(Boolean);
+      return dayData.hours
+        .map((hour) => {
+          const tempC = hour.temp;
+          const humidity = hour.humidity;
+          if (tempC == null || humidity == null) return null;
+          const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+          const avp = svp * (humidity / 100);
+          const vpd = parseFloat((svp - avp).toFixed(3));
+          return {
+            time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            vpd,
+          };
+        })
+        .filter(Boolean);
     }, [weather, selectedDay]);
 
     const chartTitle =
@@ -574,7 +617,9 @@ export default function HomePage() {
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="time" />
-              <YAxis label={{ value: "kPa", angle: -90, position: "insideLeft" }} />
+              <YAxis
+                label={{ value: "kPa", angle: -90, position: "insideLeft" }}
+              />
               <Tooltip />
               <Line
                 type="monotone"
@@ -658,9 +703,7 @@ export default function HomePage() {
 
           <label>
             {t_.kc(
-              lang === "en"
-                ? (plantEn[plantType]?.name || plantType)
-                : plantType
+              lang === "en" ? plantEn[plantType]?.name || plantType : plantType
             )}
           </label>
           <Select
@@ -677,7 +720,9 @@ export default function HomePage() {
                 ? {
                     label:
                       plantEn[plantType].labelEn[
-                        kcOptionsByPlant[plantType].findIndex((k) => k.value === kc.value)
+                        kcOptionsByPlant[plantType].findIndex(
+                          (k) => k.value === kc.value
+                        )
                       ],
                     value: kc.value,
                   }
@@ -755,12 +800,17 @@ export default function HomePage() {
                             ? (() => {
                                 // hour.datetime format: "00:00", "01:00", ...
                                 const parts = hour.datetime.split(":");
-                                return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+                                return `${parts[0].padStart(
+                                  2,
+                                  "0"
+                                )}:${parts[1].padStart(2, "0")}`;
                               })()
                             : t_.notSpecified}
                         </td>
                         <td>
-                          {temp !== undefined ? temp.toFixed(1) : t_.notSpecified}
+                          {temp !== undefined
+                            ? temp.toFixed(1)
+                            : t_.notSpecified}
                         </td>
                         <td>
                           {humidity !== undefined
@@ -768,10 +818,14 @@ export default function HomePage() {
                             : t_.notSpecified}
                         </td>
                         <td>
-                          {solarMJ !== null ? solarMJ.toFixed(2) : t_.notSpecified}
+                          {solarMJ !== null
+                            ? solarMJ.toFixed(2)
+                            : t_.notSpecified}
                         </td>
                         <td>
-                          {wind !== undefined ? wind.toFixed(1) : t_.notSpecified}
+                          {wind !== undefined
+                            ? wind.toFixed(1)
+                            : t_.notSpecified}
                         </td>
                         <td>
                           {temp !== undefined && humidity !== undefined
@@ -789,10 +843,14 @@ export default function HomePage() {
                 </tbody>
               </table>
 
-              <div style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}>
+              <div
+                style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}
+              >
                 {t_.dailyEto}: {totalDailyETo} mm
               </div>
-              <div style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}>
+              <div
+                style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}
+              >
                 <div>
                   {t_.rainfall}:{" "}
                   {rainfall !== null ? `${rainfall} mm` : t_.notSpecified}
@@ -805,23 +863,41 @@ export default function HomePage() {
                   rainfall !== null &&
                   canopyAreaSqM !== null && (
                     <>
-                      <div style={{ color: "blue", marginTop: 10, fontSize: "1.1em" }}>
-                        {t_.netWater} = ({etc.toFixed(3)} - {rainfall.toFixed(2)}) ×{" "}
-                        {canopyAreaSqM.toFixed(4)} = {waterNetPerTree}{" "}
-                        {t_.litersPerTree}
+                      <div
+                        style={{
+                          color: "blue",
+                          marginTop: 10,
+                          fontSize: "1.1em",
+                        }}
+                      >
+                        {t_.netWater} = ({etc.toFixed(3)} -{" "}
+                        {rainfall.toFixed(2)}) × {canopyAreaSqM.toFixed(4)} ={" "}
+                        {waterNetPerTree} {t_.litersPerTree}
                       </div>
 
                       {/* Climate Scenario Controls & Summary */}
                       <div style={{ marginTop: 20 }}>
-                        <div style={{ color: "red", fontWeight: "bold", fontSize: "1.1em" }}>
+                        <div
+                          style={{
+                            color: "red",
+                            fontWeight: "bold",
+                            fontSize: "1.1em",
+                          }}
+                        >
                           {t_.climateScenarioLabel}&nbsp;
                           <label>
                             {t_.tempLabel}&nbsp;
                             <input
                               type="number"
                               value={climateTempDelta}
-                              onChange={e => setClimateTempDelta(Number(e.target.value))}
-                              style={{ width: 60, color: "red", borderColor: "red" }}
+                              onChange={(e) =>
+                                setClimateTempDelta(Number(e.target.value))
+                              }
+                              style={{
+                                width: 60,
+                                color: "red",
+                                borderColor: "red",
+                              }}
                             />
                             &nbsp;{t_.degreeUnit}&nbsp;
                           </label>
@@ -831,12 +907,19 @@ export default function HomePage() {
                             <input
                               type="number"
                               value={climateHumidityDelta}
-                              onChange={e => setClimateHumidityDelta(Number(e.target.value))}
-                              style={{ width: 60, color: "red", borderColor: "red" }}
+                              onChange={(e) =>
+                                setClimateHumidityDelta(Number(e.target.value))
+                              }
+                              style={{
+                                width: 60,
+                                color: "red",
+                                borderColor: "red",
+                              }}
                             />
                             &nbsp;{t_.percentUnit}&nbsp;
                           </label>
-                          {t_.netWaterScenario} {climateScenarioWaterNetPerTree} {t_.litersPerTree}
+                          {t_.netWaterScenario} {climateScenarioWaterNetPerTree}{" "}
+                          {t_.litersPerTree}
                         </div>
                       </div>
                     </>
