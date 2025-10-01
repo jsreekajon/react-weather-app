@@ -168,7 +168,6 @@ export default function DashboardPage() {
         "D2HBXFV5VCMLAV8U4C32EUUNK",
         "RAC3VSK24LPDLNDJHNX84UA4A",
         "M9T85BKN7MTSP9MVVKU9TRX6B",
-        "XM8LEEHXGNDNFTK8Q2RGT6DHA",
       ];
       let apiKeyIndex = 0;
       function getApiKey() {
