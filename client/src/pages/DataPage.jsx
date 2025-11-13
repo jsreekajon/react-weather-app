@@ -11,6 +11,7 @@ import provinceEn from "../data/provinceEn";
 import districtEn from "../data/districtEn";
 import { kcOptionsByPlant, plantEn } from "../data/kcOptions";
 import provinceCoordinates from "../data/provinceCoordinates";
+import GoogleLoginModal from "../components/GoogleLoginModal";
 
 
 registerLocale("th", th);
@@ -304,6 +305,7 @@ export default function DataPage() {
 
   return (
     <div style={{ maxWidth: 900, margin: "30px auto" }}>
+      <GoogleLoginModal />
       <button
         style={{ float: "right", marginTop: 10 }}
         onClick={() => setLang(lang === "th" ? "en" : "th")}

@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 import provinceCoordinates from "../data/provinceCoordinates";
+import GoogleLoginModal from "../components/GoogleLoginModal";
 
 
 registerLocale("th", th);
@@ -264,6 +265,21 @@ export default function DashboardPage() {
     return weatherData.filter((d) => d.date >= start && d.date <= end);
   }, [weatherData, startDate, endDate]);
 
+  // Compute Y axis domain: ensure max has +1 unit padding (except humidity)
+  const yDomain = useMemo(() => {
+    if (!filteredHourlyData || !filteredHourlyData.length) return undefined;
+    if (yAxis?.value === "humidity") return [0, 100];
+    const vals = filteredHourlyData
+      .map((d) => d[yAxis?.value])
+      .filter((v) => typeof v === "number" && !isNaN(v));
+    if (!vals.length) return undefined;
+    const max = Math.max(...vals);
+    const min = Math.min(...vals);
+    // if flat line, give a small padding below as well
+    if (max === min) return [min - 1, max + 1];
+    return [min, max + 1];
+  }, [filteredHourlyData, yAxis]);
+
   // Custom Tooltip สำหรับกราฟ
   function CustomTooltip({ active, payload, label }) {
     if (active && payload && payload.length > 0) {
@@ -293,6 +309,8 @@ export default function DashboardPage() {
 
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
+      <GoogleLoginModal />
+      
       <button
         style={{ float: "right", marginTop: 10 }}
         onClick={() => setLang(lang === "th" ? "en" : "th")}
@@ -390,7 +408,7 @@ export default function DashboardPage() {
                   position: "insideLeft",
                   offset: 10,
                 }}
-                domain={yAxis.value === "humidity" ? [0, 100] : undefined}
+                domain={yDomain}
               />
               <Tooltip content={<CustomTooltip />} />
               <Line

@@ -23,6 +23,7 @@ import {
   Tooltip,
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
+import GoogleLoginModal from "../components/GoogleLoginModal";
 
 
 // เพิ่มอ็อบเจ็กต์ข้อความสองภาษา
@@ -646,6 +647,7 @@ export default function HomePage() {
 
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
+      <GoogleLoginModal />
       {/* ปุ่มเปลี่ยนภาษา */}
       <button
         style={{ float: "right", marginTop: 10 }}
