@@ -14,6 +14,12 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
 
 
+import { logPageView, logDataPageSearch } from "../utils/analytics";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth } from "../firebase";
+import useFetchProfile from "../hooks/useFetchProfile"; 
+import { useEffect } from "react";
+
 registerLocale("th", th);
 
 // ✅ เก็บฝั่ง new-data
@@ -36,6 +42,9 @@ function rotateApiKey() {
 }
 
 export default function DataPage() {
+  useFetchProfile();
+  const [user] = useAuthState(auth);
+  
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
@@ -58,6 +67,16 @@ export default function DataPage() {
   const [kc, setKc] = useState(kcOptionsByPlant[defaultPlant][0]);
 
   const { lang, setLang } = useLanguage();
+
+
+  useEffect(() => {
+    if (user && province?.value) {
+      logPageView(user, "DataPage", {
+        province: province.value,
+        district: district.value,
+      });
+    }
+  }, [user, province?.value, district?.value]);
 
   // เพิ่ม translations สำหรับทุกข้อความ
   const translations = {
@@ -169,6 +188,17 @@ export default function DataPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       if (!province.value || !district.value) return;
+      // Log search data to Firebase
+      if (user) {
+        logDataPageSearch(user, {
+          province: province.value,
+          district: district.value,
+          plantType: plantType,
+          kc: kc.value,
+          startDate: startDate.toISOString().slice(0, 10),
+          endDate: endDate.toISOString().slice(0, 10),
+        });
+      }
       setLoading(true);
       setData([]);
       // Format start and end date

@@ -24,7 +24,7 @@ import {
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 import GoogleLoginModal from "../components/GoogleLoginModal";
-
+import { logPageView } from "../utils/analytics";
 
 // เพิ่มอ็อบเจ็กต์ข้อความสองภาษา
 const translations = {
@@ -59,6 +59,7 @@ const translations = {
     netWaterScenario: "ทำให้ปริมาณน้ำสุทธิที่ต้องให้น้ำเอง =",
     degreeUnit: "°C",
     percentUnit: "%",
+    saveData: "บันทึกข้อมูลสรุป",
   },
   en: {
     weatherForecast: "Predictive Plant Water Consumption Model",
@@ -91,6 +92,7 @@ const translations = {
     netWaterScenario: "Net irrigation required =",
     degreeUnit: "°C",
     percentUnit: "%",
+    saveData: "Save Summary Data",
   },
 };
 
@@ -141,6 +143,18 @@ export default function HomePage() {
   const t_ = translations[lang];
 
   const formatDate = (d) => d.toISOString().slice(0, 10);
+
+
+  useEffect(() => {
+    if (user && province?.value) {
+      logPageView(user, "HomePage", {
+        province: province.value,
+        district: district.value,
+      });
+    }
+    // เราจะให้ยิง log นี้แค่ครั้งเดียวเมื่อ user และ province พร้อม
+  }, [user, province?.value, district?.value]);
+
 
   useEffect(() => {
     const firstDistrict = provinces[province.value]?.[0];
@@ -384,55 +398,6 @@ export default function HomePage() {
     return parseFloat((svp - avp).toFixed(3));
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (
-        vpd !== null &&
-        province &&
-        district &&
-        selectedDay &&
-        totalDailyETo !== null &&
-        rainfall !== null &&
-        etc !== null &&
-        waterNetPerTree !== null
-      ) {
-        const saveRawData = async () => {
-          try {
-            await addDoc(collection(db, "weather_minute_summary"), {
-              province: province.value,
-              district: district.value,
-              canopyRadius: parseFloat(canopyRadius),
-              kc: kc.value,
-              date: new Date(selectedDay),
-              timestamp: new Date(),
-              totalDailyETo: parseFloat(totalDailyETo),
-              rainfall: parseFloat(rainfall),
-              etc: parseFloat(etc.toFixed(3)),
-              waterNetPerTree: parseFloat(waterNetPerTree),
-              vpd,
-            });
-            console.log("✅ บันทึกข้อมูลดิบเรียบร้อย (10 นาที)");
-          } catch (e) {
-            console.error("❌ บันทึกข้อมูลดิบล้มเหลว:", e);
-          }
-        };
-        saveRawData();
-      }
-    }, 10 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [
-    province,
-    district,
-    selectedDay,
-    totalDailyETo,
-    rainfall,
-    etc,
-    waterNetPerTree,
-    vpd,
-    canopyRadius,
-    kc,
-  ]);
 
   useWeatherAggregator({
     user,
@@ -447,6 +412,46 @@ export default function HomePage() {
     waterNetPerTree,
     vpd,
   });
+
+
+  const handleSaveSummary = async () => {
+    if (
+      vpd !== null &&
+      province &&
+      district &&
+      selectedDay &&
+      totalDailyETo !== null &&
+      rainfall !== null &&
+      etc !== null &&
+      waterNetPerTree !== null
+    ) {
+      try {
+        await addDoc(collection(db, "weather_minute_summary"), {
+          province: province.value,
+          district: district.value,
+          canopyRadius: parseFloat(canopyRadius),
+          kc: kc.value,
+          date: new Date(selectedDay),
+          timestamp: new Date(),
+          totalDailyETo: parseFloat(totalDailyETo),
+          rainfall: parseFloat(rainfall),
+          etc: parseFloat(etc.toFixed(3)),
+          waterNetPerTree: parseFloat(waterNetPerTree),
+          vpd,
+        });
+        // แจ้งเตือนผู้ใช้เมื่อสำเร็จ
+        alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+      } catch (e) {
+        console.error("❌ บันทึกข้อมูลล้มเหลว:", e);
+        // แจ้งเตือนผู้ใช้เมื่อล้มเหลว
+        alert(lang === "th" ? "❌ บันทึกข้อมูลล้มเหลว" : "❌ Failed to save data");
+      }
+    } else {
+      // แจ้งเตือนหากข้อมูลยังไม่พร้อม
+      alert(lang === "th" ? "⚠️ ข้อมูลไม่ครบถ้วน ไม่สามารถบันทึกได้" : "⚠️ Incomplete data, cannot save.");
+    }
+  };
+
 
   const [climateTempDelta, setClimateTempDelta] = useState(2); // +2°C
   const [climateHumidityDelta, setClimateHumidityDelta] = useState(-20); // -20%
@@ -933,6 +938,14 @@ export default function HomePage() {
                           {t_.litersPerTree}
                         </div>
                       </div>
+
+                      <button 
+                        onClick={handleSaveSummary} 
+                        style={{ marginTop: 15, width: "100%", padding: 8, fontSize: '1.1em', cursor: 'pointer' }}
+                      >
+                        {t_.saveData}
+                      </button>
+
                     </>
                   )}
               </div>

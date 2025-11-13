@@ -20,6 +20,9 @@ import {
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
+import { logPageView, logDashboardSummary } from "../utils/analytics";
+import { useAuthState } from "react-firebase-hooks/auth"; 
+import { auth } from "../firebase";
 
 
 registerLocale("th", th);
@@ -41,6 +44,7 @@ function getYAxisOptions(currentLang) {
 
 export default function DashboardPage() {
   useFetchProfile();
+  const [user] = useAuthState(auth);
   const { lang, setLang } = useLanguage(); // ใช้ context
 
   const defaultProvince = Object.keys(provinces)[0];
@@ -60,6 +64,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [yAxis, setYAxis] = useState(getYAxisOptions(lang)[0]);
+
+  // Log page view
+  useEffect(() => {
+    if (user && province?.value) {
+      logPageView(user, "DashboardPage", {
+        province: province.value,
+        district: district.value,
+      });
+    }
+  }, [user, province?.value, district?.value]);
 
   // อัปเดต label ของ yAxis ตามภาษา แต่คงค่า value เดิม
   useEffect(() => {
@@ -377,6 +391,22 @@ export default function DashboardPage() {
             onChange={setYAxis}
           />
         </div>
+        <button
+          onClick={() => {
+            if (user) {
+              logDashboardSummary(user, {
+                province: province.value,
+                district: district.value,
+                startDate: formatDate(startDate),
+                endDate: formatDate(endDate),
+                yAxis: yAxis.value,
+              });
+            }
+          }}
+          style={{ alignSelf: "end" }}
+        >
+          {lang === "th" ? "บันทึกข้อมูลสรุป" : "Save Summary Data"}
+        </button>
       </div>
       {loading ? (
         <p>{t_.loading}</p>
