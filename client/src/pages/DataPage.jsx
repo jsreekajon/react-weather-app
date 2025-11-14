@@ -14,7 +14,7 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
 
 
-import { logPageView, logDataPageSearch } from "../utils/analytics";
+import { logPageView, logDataPageSummary } from "../utils/analytics";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
 import useFetchProfile from "../hooks/useFetchProfile"; 
@@ -190,7 +190,7 @@ export default function DataPage() {
       if (!province.value || !district.value) return;
       // Log search data to Firebase
       if (user) {
-        logDataPageSearch(user, {
+        logDataPageSummary(user, {
           province: province.value,
           district: district.value,
           plantType: plantType,

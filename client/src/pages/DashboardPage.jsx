@@ -20,7 +20,7 @@ import {
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
-import { logPageView, logDashboardSummary } from "../utils/analytics";
+import { logPageView, logDashboardPageSummary } from "../utils/analytics";
 import { useAuthState } from "react-firebase-hooks/auth"; 
 import { auth } from "../firebase";
 
@@ -394,7 +394,7 @@ export default function DashboardPage() {
         <button
           onClick={() => {
             if (user) {
-              logDashboardSummary(user, {
+              logDashboardPageSummary(user, {
                 province: province.value,
                 district: district.value,
                 startDate: formatDate(startDate),

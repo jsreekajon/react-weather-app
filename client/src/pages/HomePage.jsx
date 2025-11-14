@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Select from "react-select";
-import { db } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
 import provinces from "../data/provinces";
 import provinceCoordinates from "../data/provinceCoordinates";
 import { calculateHourlyETo } from "../utils/calculateETo";
@@ -24,7 +22,11 @@ import {
 } from "recharts";
 import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
 import GoogleLoginModal from "../components/GoogleLoginModal";
-import { logPageView } from "../utils/analytics";
+import {
+  logPageView,
+  logMinuteSummary,
+  logHomePageSummary,
+} from "../utils/analytics";
 
 // เพิ่มอ็อบเจ็กต์ข้อความสองภาษา
 const translations = {
@@ -423,22 +425,40 @@ export default function HomePage() {
       totalDailyETo !== null &&
       rainfall !== null &&
       etc !== null &&
-      waterNetPerTree !== null
+      waterNetPerTree !== null &&
+      user
     ) {
       try {
-        await addDoc(collection(db, "weather_minute_summary"), {
+        // บันทึกลง weather_minute_summary collection
+        await logMinuteSummary(user, {
           province: province.value,
           district: district.value,
           canopyRadius: parseFloat(canopyRadius),
           kc: kc.value,
-          date: new Date(selectedDay),
-          timestamp: new Date(),
+          selectedDay,
           totalDailyETo: parseFloat(totalDailyETo),
           rainfall: parseFloat(rainfall),
-          etc: parseFloat(etc.toFixed(3)),
+          etc: parseFloat(etc),
           waterNetPerTree: parseFloat(waterNetPerTree),
           vpd,
         });
+
+        // บันทึกลง HomePage collection (เก็บเป็น document เดียวต่อ email)
+        await logHomePageSummary(user, {
+          province: province.value,
+          district: district.value,
+          canopyRadius: parseFloat(canopyRadius),
+          plantType,
+          kc: kc.value,
+          selectedDate: selectedDay,
+          totalDailyETo: parseFloat(totalDailyETo),
+          rainfall: parseFloat(rainfall),
+          etc: parseFloat(etc),
+          waterNetPerTree: parseFloat(waterNetPerTree),
+          climateTempDelta,
+          climateHumidityDelta,
+        });
+
         // แจ้งเตือนผู้ใช้เมื่อสำเร็จ
         alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
       } catch (e) {
