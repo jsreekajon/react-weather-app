@@ -323,10 +323,22 @@ export default function DashboardPage() {
 
   // handler for save button: call analytics and show toast
   const handleSaveButton = async () => {
+    console.log("=== handleSaveButton called ===");
+    console.log("user:", user);
+    console.log("user?.uid:", user?.uid);
+    console.log("user?.email:", user?.email);
     if (!user) {
       alert(lang === "th" ? "กรุณาเข้าสู่ระบบก่อน" : "Please login first");
       return;
     }
+    const payload = {
+      province: province.value,
+      district: district.value,
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate),
+      yAxis: yAxis.value,
+    };
+    console.log("Payload to save:", payload);
     try {
       await logDashboardPageSummary(user, {
         province: province.value,
@@ -335,8 +347,10 @@ export default function DashboardPage() {
         endDate: formatDate(endDate),
         yAxis: yAxis.value,
       });
+      console.log("✅ logDashboardPageSummary completed successfully");
       alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
     } catch (e) {
+      console.error("❌ Error in logDashboardPageSummary:", e);
       console.error("Error saving dashboard summary:", e);
       alert(lang === "th" ? "❌ บันทึกข้อมูลล้มเหลว" : "❌ Failed to save data");
     }

@@ -14,7 +14,7 @@ import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
 
 
-import { logPageView, logDataPageSummary } from "../utils/analytics";
+import { logPageView, logDataPageSearch } from "../utils/analytics";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
 import useFetchProfile from "../hooks/useFetchProfile"; 
@@ -189,22 +189,7 @@ export default function DataPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       if (!province.value || !district.value) return;
-      // Log search data to Firebase and show a popup
-      if (user) {
-        try {
-          await logDataPageSummary(user, {
-            province: province.value,
-            district: district.value,
-            plantType: plantType,
-            kc: kc.value,
-            startDate: startDate.toISOString().slice(0, 10),
-            endDate: endDate.toISOString().slice(0, 10),
-          });
-          alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
-        } catch (e) {
-          console.error("Failed to log search:", e);
-        }
-      }
+      
       setLoading(true);
       setData([]);
       // Format start and end date
@@ -224,6 +209,24 @@ export default function DataPage() {
       if (cached) {
         setData(JSON.parse(cached));
         setLoading(false);
+        // Log search data to Firestore after successful fetch from cache
+        if (user) {
+          try {
+            console.log("=== handleFetch (cached) - Logging DataPage search ===");
+            await logDataPageSearch(user, {
+              province: province.value,
+              district: district.value,
+              plantType: plantType,
+              kc: kc.value,
+              startDate: startStr,
+              endDate: endStr,
+            });
+            alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+          } catch (e) {
+            console.error("[handleFetch] Failed to log search:", e);
+            alert(lang === "th" ? "❌ บันทึกข้อมูลไม่สำเร็จ" : "❌ Failed to save data");
+          }
+        }
         return;
       }
       let tries = 0;
@@ -301,6 +304,25 @@ export default function DataPage() {
           localStorage.setItem(cacheKey, JSON.stringify(tableData));
           setData(tableData);
           setLoading(false);
+          
+          // Log search data to Firestore after successful fetch
+          if (user) {
+            try {
+              console.log("=== handleFetch (API) - Logging DataPage search ===");
+              await logDataPageSearch(user, {
+                province: province.value,
+                district: district.value,
+                plantType: plantType,
+                kc: kc.value,
+                startDate: startStr,
+                endDate: endStr,
+              });
+              alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+            } catch (e) {
+              console.error("[handleFetch] Failed to log search:", e);
+              alert(lang === "th" ? "❌ บันทึกข้อมูลไม่สำเร็จ" : "❌ Failed to save data");
+            }
+          }
           return;
         } catch (e) {
           console.error("Fetch failed:", e.message);

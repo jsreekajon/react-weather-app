@@ -56,15 +56,26 @@ export const logDashboardSummary = async (user, data = {}) => {
 };
 
 /**
- * บันทึกข้อมูลค้นหา Data Page ลง Firestore
+ * บันทึกข้อมูลค้นหา Data Page ลง Firestore (สร้าง document ใหม่ทุกครั้ง)
  * @param {User} user - อ็อบเจ็กต์ user จาก useAuthState
  * @param {object} data - ข้อมูลที่ต้องการบันทึก {province, district, plantType, kc, startDate, endDate}
  */
 export const logDataPageSearch = async (user, data = {}) => {
-  if (!user) return;
+  console.log("[logDataPageSearch] called with:", { user, data });
+  if (!user || !user.email) {
+    console.error("[logDataPageSearch] No user or user.email", { uid: user?.uid, email: user?.email });
+    return;
+  }
 
   try {
-    await addDoc(collection(db, "data_searches"), {
+    // Create a new random ID, then combine with the user's email to form the document ID
+    const newDocRef = doc(collection(db, "DataPage"));
+    const randomId = newDocRef.id;
+    const compositeId = `${user.email}_${randomId}`;
+    const finalDocRef = doc(db, "DataPage", compositeId);
+    console.log("[logDataPageSearch] Generated composite ID:", compositeId);
+
+    const docData = {
       userId: user.uid,
       userEmail: user.email,
       province: data.province || "",
@@ -74,10 +85,14 @@ export const logDataPageSearch = async (user, data = {}) => {
       startDate: data.startDate || "",
       endDate: data.endDate || "",
       timestamp: serverTimestamp(),
-    });
-    console.log("Data page search logged");
+    };
+    console.log("[logDataPageSearch] Document data:", docData);
+
+    await setDoc(finalDocRef, docData);
+    console.log("[logDataPageSearch] ✅ Document successfully written!");
   } catch (error) {
-    console.error("Error logging data page search:", error);
+    console.error("[logDataPageSearch] ❌ Error logging DataPage search:", error);
+    throw error;
   }
 };
 
@@ -161,10 +176,21 @@ export const logHomePageSummary = async (user, data = {}) => {
  * @param {object} data - ข้อมูลที่ต้องการบันทึก {province, district, startDate, endDate, yAxis}
  */
 export const logDashboardPageSummary = async (user, data = {}) => {
-  if (!user || !user.email) return;
+  console.log("[logDashboardPageSummary] called with:", { user, data });
+  if (!user || !user.email) {
+    console.error("[logDashboardPageSummary] No user or user.email", { uid: user?.uid, email: user?.email });
+    return;
+  }
 
   try {
-    await addDoc(collection(db, "DashboardPage"), {
+    // Create a new random ID, then combine with the user's email to form the document ID
+    const newDocRef = doc(collection(db, "DashboardPage"));
+    const randomId = newDocRef.id;
+    const compositeId = `${user.email}_${randomId}`;
+    const finalDocRef = doc(db, "DashboardPage", compositeId);
+    console.log("[logDashboardPageSummary] Generated composite ID:", compositeId);
+
+    const docData = {
       userId: user.uid,
       userEmail: user.email,
       province: data.province || "",
@@ -173,10 +199,14 @@ export const logDashboardPageSummary = async (user, data = {}) => {
       endDate: data.endDate || "",
       yAxis: data.yAxis || "",
       timestamp: serverTimestamp(),
-    });
-    console.log("DashboardPage summary logged for:", user.email);
+    };
+    console.log("[logDashboardPageSummary] Document data:", docData);
+
+    await setDoc(finalDocRef, docData);
+    console.log("[logDashboardPageSummary] ✅ Document successfully written!");
   } catch (error) {
-    console.error("Error logging DashboardPage summary:", error);
+    console.error("[logDashboardPageSummary] ❌ Error logging DashboardPage summary:", error);
+    throw error;
   }
 };
 
