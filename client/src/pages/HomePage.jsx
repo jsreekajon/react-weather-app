@@ -478,10 +478,10 @@ export default function HomePage() {
         climateHumidityDelta,
       });
 
-      alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+      alert("✅ Data saved successfully");
     } catch (e) {
       console.error("Save failed:", e);
-      alert(lang === "th" ? "❌ บันทึกข้อมูลล้มเหลว" : "❌ Failed to save data");
+      alert("❌ Failed to save data");
     }
   };
 

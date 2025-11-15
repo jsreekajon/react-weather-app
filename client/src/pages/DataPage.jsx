@@ -221,10 +221,10 @@ export default function DataPage() {
               startDate: startStr,
               endDate: endStr,
             });
-            alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+            alert("✅ Data saved successfully");
           } catch (e) {
             console.error("[handleFetch] Failed to log search:", e);
-            alert(lang === "th" ? "❌ บันทึกข้อมูลไม่สำเร็จ" : "❌ Failed to save data");
+            alert("❌ Failed to save data");
           }
         }
         return;
@@ -317,10 +317,10 @@ export default function DataPage() {
                 startDate: startStr,
                 endDate: endStr,
               });
-              alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+              alert("✅ Data saved successfully");
             } catch (e) {
               console.error("[handleFetch] Failed to log search:", e);
-              alert(lang === "th" ? "❌ บันทึกข้อมูลไม่สำเร็จ" : "❌ Failed to save data");
+              alert("❌ Failed to save data");
             }
           }
           return;

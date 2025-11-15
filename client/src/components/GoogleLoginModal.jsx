@@ -2,10 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../firebase";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { useLanguage } from "../contexts/LanguageContext";
 
 export default function GoogleLoginModal() {
-  const { lang } = useLanguage();
   const [user, userLoading] = useAuthState(auth);
 
   const isGoogleUser = !!(
@@ -27,28 +25,20 @@ export default function GoogleLoginModal() {
       setShow(false);
     } catch (err) {
       console.error("Google sign-in failed:", err);
-      alert(lang === "th" ? "การเข้าสู่ระบบล้มเหลว" : "Google sign-in failed");
+      alert("Google sign-in failed");
     }
   };
 
   if (!show) return null;
 
   const texts = {
-    th: {
-      title: "โปรดเข้าสู่ระบบด้วย Gmail",
-      message: "โปรดเข้าสู่ระบบด้วยบัญชี Google (Gmail) เพื่อใช้งานหน้านี้",
-      loginBtn: "เข้าสู่ระบบด้วย Google",
-      homeBtn: "ไปหน้าหลัก",
-    },
-    en: {
-      title: "Please sign in with Google",
-      message: "Please sign in with a Google account to use this page",
-      loginBtn: "Sign in with Google",
-      homeBtn: "Go to Home",
-    },
+    title: "Please sign in with Google",
+    message: "Please sign in with a Google account to use this page",
+    loginBtn: "Sign in with Google",
+    homeBtn: "Go to Home",
   };
 
-  const t = texts[lang] || texts.th;
+  const t = texts;
 
   return (
     <div
