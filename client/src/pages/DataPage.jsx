@@ -45,6 +45,7 @@ export default function DataPage() {
   useFetchProfile();
   const [user] = useAuthState(auth);
   
+  
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
@@ -188,16 +189,21 @@ export default function DataPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       if (!province.value || !district.value) return;
-      // Log search data to Firebase
+      // Log search data to Firebase and show a popup
       if (user) {
-        logDataPageSummary(user, {
-          province: province.value,
-          district: district.value,
-          plantType: plantType,
-          kc: kc.value,
-          startDate: startDate.toISOString().slice(0, 10),
-          endDate: endDate.toISOString().slice(0, 10),
-        });
+        try {
+          await logDataPageSummary(user, {
+            province: province.value,
+            district: district.value,
+            plantType: plantType,
+            kc: kc.value,
+            startDate: startDate.toISOString().slice(0, 10),
+            endDate: endDate.toISOString().slice(0, 10),
+          });
+          alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+        } catch (e) {
+          console.error("Failed to log search:", e);
+        }
       }
       setLoading(true);
       setData([]);
@@ -505,6 +511,8 @@ export default function DataPage() {
         </table>
       ) : null}
       {!loading && !data.length && <p>{t_.notFound}</p>}
+      {!loading && !data.length && <p>{t_.notFound}</p>}
+      
     </div>
   );
 }

@@ -321,6 +321,27 @@ export default function DashboardPage() {
     return null;
   }
 
+  // handler for save button: call analytics and show toast
+  const handleSaveButton = async () => {
+    if (!user) {
+      alert(lang === "th" ? "กรุณาเข้าสู่ระบบก่อน" : "Please login first");
+      return;
+    }
+    try {
+      await logDashboardPageSummary(user, {
+        province: province.value,
+        district: district.value,
+        startDate: formatDate(startDate),
+        endDate: formatDate(endDate),
+        yAxis: yAxis.value,
+      });
+      alert(lang === "th" ? "✅ บันทึกข้อมูลเรียบร้อย" : "✅ Data saved successfully");
+    } catch (e) {
+      console.error("Error saving dashboard summary:", e);
+      alert(lang === "th" ? "❌ บันทึกข้อมูลล้มเหลว" : "❌ Failed to save data");
+    }
+  };
+
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
       <GoogleLoginModal />
@@ -391,20 +412,7 @@ export default function DashboardPage() {
             onChange={setYAxis}
           />
         </div>
-        <button
-          onClick={() => {
-            if (user) {
-              logDashboardPageSummary(user, {
-                province: province.value,
-                district: district.value,
-                startDate: formatDate(startDate),
-                endDate: formatDate(endDate),
-                yAxis: yAxis.value,
-              });
-            }
-          }}
-          style={{ alignSelf: "end" }}
-        >
+        <button onClick={handleSaveButton} style={{ alignSelf: "end" }}>
           {lang === "th" ? "บันทึกข้อมูลสรุป" : "Save Summary Data"}
         </button>
       </div>
@@ -454,6 +462,7 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </>
       )}
+      
     </div>
   );
 }
