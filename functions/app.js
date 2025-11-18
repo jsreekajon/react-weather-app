@@ -27,7 +27,10 @@ if (serviceAccount) {
 const db = admin.firestore();
 const app = express();
 
-app.use(cors({ origin: true }));
+// ตัวอย่างการใช้กับ CORS - ดึง Frontend URL จาก Environment Variable
+const frontendUrl = process.env.FRONTEND_URL || "https://weather-31ba2.web.app";
+
+app.use(cors({ origin: frontendUrl }));
 app.use(express.json());
 app.use((req, res, next) => {
   res.setHeader("Content-Security-Policy", "default-src *; img-src * data: blob:;");
@@ -77,24 +80,23 @@ function calculateHourlyETo({ temp, humidity, windSpeed, solarRadiation, altitud
 }
 
 // --- 4. MIDDLEWARE (ความปลอดภัย) ---
-async function verifyToken(req, res, next) {
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).send('Unauthorized: No token provided');
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+
   try {
-    const authHeader = req.headers.authorization || "";
-    const idToken = authHeader.startsWith("Bearer ")
-      ? authHeader.split("Bearer ")[1]
-      : null;
-
-    if (!idToken)
-      return res.status(401).json({ error: "Unauthorized - no token provided" });
-
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    req.user = decodedToken;
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken; // เก็บข้อมูล User ไว้ใช้ต่อ
     next();
   } catch (error) {
-    console.error("Token verification error:", error.message);
-    return res.status(403).json({ error: "Invalid or expired token" });
+    return res.status(403).send('Unauthorized: Invalid token');
   }
-}
+};
 
 // --- 5. ROUTES ---
 
@@ -222,3 +224,10 @@ mqttClient.on("message", async (topic, message) => {
 });
 
 module.exports = app;
+
+if (process.env.NODE_ENV !== 'production') {
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', frontend: FRONTEND_URL });
+  });
+}
