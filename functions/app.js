@@ -4,7 +4,7 @@ const admin = require("firebase-admin");
 const path = require("path");
 const fs = require("fs");
 const mqtt = require("mqtt");
-const axios = require("axios"); // แนะนำให้ใช้ axios หรือ node-fetch เพื่อความชัวร์ใน node env
+const axios = require("axios"); 
 
 // --- 1. SETUP FIREBASE ---
 let serviceAccount;
@@ -32,8 +32,23 @@ const frontendUrl = process.env.FRONTEND_URL || "https://weather-31ba2.web.app";
 
 app.use(cors({ origin: frontendUrl }));
 app.use(express.json());
+
+// --- แก้ไขส่วน CSP ให้ปลอดภัยยิ่งขึ้น ---
 app.use((req, res, next) => {
-  res.setHeader("Content-Security-Policy", "default-src *; img-src * data: blob:;");
+  res.setHeader(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'", // อนุญาตเฉพาะโดเมนตัวเองเป็นค่าเริ่มต้น
+      "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com", // อนุญาต Script จาก Google/Firebase
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // อนุญาต CSS inline และ Google Fonts
+      "font-src 'self' https://fonts.gstatic.com", // อนุญาต Font
+      "img-src 'self' data: blob: https://weather.visualcrossing.com https://*.googleusercontent.com", // อนุญาตรูปภาพจาก Weather API และ Google Profile
+      "connect-src 'self' https://weather.visualcrossing.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com wss://broker.emqx.io", // อนุญาตการเชื่อมต่อ API และ WebSocket (MQTT)
+      "object-src 'none'", // ป้องกันการฝัง Plugin อันตราย (Flash, Java)
+      "base-uri 'self'",
+      "frame-ancestors 'none'" // ป้องกันการถูกนำเว็บไปฝังใน iFrame (Clickjacking)
+    ].join("; ")
+  );
   next();
 });
 
@@ -202,7 +217,7 @@ if (fs.existsSync(buildPath)) {
 }
 
 // MQTT Integration (Code เดิมของคุณโอเคแล้ว)
-const mqttClient = mqtt.connect("mqtt://broker.emqx.io:1883");
+const mqttClient = mqtt.connect("mqtts://broker.emqx.io:1883");
 mqttClient.on("connect", () => {
   mqttClient.subscribe(["weather/data", "weather/processed"], (err) => {
     if (!err) console.log("✅ Subscribed to MQTT topics");
