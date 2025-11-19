@@ -1,9 +1,60 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read/write their own data
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
     }
+
+    function isOwner() {
+      return isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    function isValidOwner() {
+      return isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // --- Rules Definitions ---
+
+    // 1. กฎสำหรับข้อมูลสภาพอากาศ (จาก functions/app.js ของคุณ)
+    // ปกติ Backend (Admin SDK) จะเขียนได้เสมอโดยไม่ต้องสนใจ Rules
+    // กฎนี้มีไว้สำหรับ "Client" (Frontend)
+    match /weather_results/{docId} {
+       // อนุญาตให้ใครก็ได้อ่าน (ถ้าต้องการเปิด Public)
+       allow read: if true;
+       
+       // หรือถ้าต้องการให้เฉพาะคนล็อกอินอ่าน
+       // allow read: if isSignedIn();
+
+       // ห้าม Client เขียน/แก้ไข/ลบ (ให้ Backend จัดการเท่านั้น)
+       allow write: if false; 
+    }
+
+    // 2. กฎสำหรับโปรไฟล์ผู้ใช้
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 3. ข้อมูลส่วนตัวของผู้ใช้ (Dashboard, Page Views)
+    match /page_views/{docId} {
+      allow read, delete: if isOwner();
+      allow create: if isValidOwner();
+      allow update: if isOwner() && isValidOwner();
+    }
+
+    match /dashboard_summaries/{docId} {
+      allow read, delete: if isOwner();
+      allow create: if isValidOwner();
+      allow update: if isOwner() && isValidOwner();
+    }
+
+    match /data_searches/{docId} {
+      allow read, delete: if isOwner();
+      allow create: if isValidOwner();
+      allow update: if isOwner() && isValidOwner();
+    }
+    
+    // Collection อื่นๆ ที่ไม่ได้ระบุ จะถูก Block ทั้งหมดโดยอัตโนมัติ (ปลอดภัย)
   }
 }
