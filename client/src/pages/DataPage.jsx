@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
@@ -13,18 +13,15 @@ import { kcOptionsByPlant, plantEn } from "../data/kcOptions";
 import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
 
-
 import { logPageView, logDataPageSearch } from "../utils/analytics";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase"; // เพิ่ม db
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"; // เพิ่ม firestore function
 import useFetchProfile from "../hooks/useFetchProfile"; 
-import { useEffect } from "react";
 
 registerLocale("th", th);
 
-// ✅ เก็บฝั่ง new-data
 const API_KEYS = [
-  
   "8GEWAKR6AXWDET8C3DVV787XW", 
   "W5VMZDF42HAR6S9RJTSLX2MJY", 
   "D2HBXFV5VCMLAV8U4C32EUUNK",
@@ -45,7 +42,6 @@ export default function DataPage() {
   useFetchProfile();
   const [user] = useAuthState(auth);
   
-  
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
@@ -62,13 +58,67 @@ export default function DataPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Plant type and Kc selection
   const defaultPlant = Object.keys(kcOptionsByPlant)[0];
   const [plantType, setPlantType] = useState(defaultPlant);
   const [kc, setKc] = useState(kcOptionsByPlant[defaultPlant][0]);
 
   const { lang, setLang } = useLanguage();
 
+  // --- ส่วนที่เพิ่ม: ดึงข้อมูลล่าสุดจาก Firestore ---
+  useEffect(() => {
+    const fetchLastSavedData = async () => {
+      if (user?.email) {
+        try {
+          const q = query(
+            collection(db, "DataPage"),
+            where("userEmail", "==", user.email),
+            orderBy("timestamp", "desc"),
+            limit(1)
+          );
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const saved = querySnapshot.docs[0].data();
+            console.log("Restoring DataPage data:", saved);
+
+            // Restore Province
+            if (saved.province) {
+              setProvince({
+                label: getProvinceLabel(saved.province),
+                value: saved.province,
+              });
+              // Restore District
+              if (saved.district) {
+                setDistrict({
+                  label: getDistrictLabel(saved.province, saved.district),
+                  value: saved.district,
+                });
+              }
+            }
+
+            // Restore Plant & Kc
+            if (saved.plantType) {
+              setPlantType(saved.plantType);
+              if (saved.kc) {
+                const options = kcOptionsByPlant[saved.plantType] || [];
+                // Find matching kc object by value
+                const foundKc = options.find(k => k.value === saved.kc);
+                if (foundKc) setKc(foundKc);
+              }
+            }
+
+            // Restore Dates
+            if (saved.startDate) setStartDate(new Date(saved.startDate));
+            if (saved.endDate) setEndDate(new Date(saved.endDate));
+          }
+        } catch (error) {
+          console.error("Error fetching last data page search:", error);
+        }
+      }
+    };
+    fetchLastSavedData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  // ------------------------------------------------
 
   useEffect(() => {
     if (user && province?.value) {
@@ -79,7 +129,6 @@ export default function DataPage() {
     }
   }, [user, province?.value, district?.value]);
 
-  // เพิ่ม translations สำหรับทุกข้อความ
   const translations = {
     th: {
       langBtn: "EN",
@@ -134,7 +183,7 @@ export default function DataPage() {
       error: "Failed to load data",
     },
   };
-  // Plant dropdown options
+
   const getPlantLabel = (plant) =>
     lang === "en" ? plantEn[plant]?.name || plant : plant;
   const plantOptions = Object.keys(kcOptionsByPlant).map((key) => ({
@@ -142,7 +191,6 @@ export default function DataPage() {
     value: key,
   }));
 
-  // Kc dropdown options
   const kcOptions =
     lang === "en" && plantEn[plantType]?.labelEn
       ? kcOptionsByPlant[plantType].map((opt, idx) => ({
@@ -183,7 +231,6 @@ export default function DataPage() {
     return `${d}-${m}-${y}`;
   };
 
-  // Debounce & cache
   const debounceRef = useRef();
   const handleFetch = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -192,7 +239,6 @@ export default function DataPage() {
       
       setLoading(true);
       setData([]);
-      // Format start and end date
       const startStr = startDate.toISOString().slice(0, 10);
       const endStr = endDate.toISOString().slice(0, 10);
 
@@ -200,19 +246,14 @@ export default function DataPage() {
       const location = coords ? `${coords[0]},${coords[1]}` : `${province.value},TH`;
 
       console.log("province", province ,"coords", coords, "location", location);
-      // const location = `${district.value},${province.value},TH`;
 
-      
-      // Include plantType and kc in cache key
       const cacheKey = `weather_${location}_${startStr}_${endStr}_${plantType}_${kc.value}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         setData(JSON.parse(cached));
         setLoading(false);
-        // Log search data to Firestore after successful fetch from cache
         if (user) {
           try {
-            console.log("=== handleFetch (cached) - Logging DataPage search ===");
             await logDataPageSearch(user, {
               province: province.value,
               district: district.value,
@@ -233,10 +274,7 @@ export default function DataPage() {
       while (tries < API_KEYS.length) {
         const apiKey = getApiKey();
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${startStr}/${endStr}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
-        console.log(url);
         try {
-          // Debug: log the url
-          console.log("Fetching weather data from:", url);
           const res = await fetch(url);
           if (res.status === 429) {
             rotateApiKey();
@@ -244,12 +282,9 @@ export default function DataPage() {
             continue;
           }
           if (!res.ok) {
-            const errText = await res.text();
-            console.error("API error:", res.status, errText);
             throw new Error("โหลดข้อมูลล้มเหลว");
           }
           const json = await res.json();
-          // Flatten all hours from all days, add date field
           const tableData = [];
           (json.days || []).forEach((day) => {
             const dateLabel =
@@ -283,7 +318,6 @@ export default function DataPage() {
                           Math.exp((17.27 * row.temp) / (row.temp + 237.3)))
                     ).toFixed(3)
                   : "";
-              // Calculate ETc per hour
               const etcHourly =
                 etoHourly !== null && kc.value !== undefined
                   ? (etoHourly * kc.value).toFixed(3)
@@ -305,10 +339,8 @@ export default function DataPage() {
           setData(tableData);
           setLoading(false);
           
-          // Log search data to Firestore after successful fetch
           if (user) {
             try {
-              console.log("=== handleFetch (API) - Logging DataPage search ===");
               await logDataPageSearch(user, {
                 province: province.value,
                 district: district.value,
@@ -325,14 +357,13 @@ export default function DataPage() {
           }
           return;
         } catch (e) {
-          console.error("Fetch failed:", e.message);
           tries++;
           rotateApiKey();
         }
       }
       alert("เกิดข้อผิดพลาดในการโหลดข้อมูล");
       setLoading(false);
-    }, 1000); // debounce 1 วินาที
+    }, 1000);
   };
 
   const handleExport = () => {
@@ -341,22 +372,10 @@ export default function DataPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "WeatherData");
     const startStr = startDate
-      ? startDate
-          .toLocaleDateString("th-TH", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          })
-          .replace(/\//g, "-")
+      ? startDate.toLocaleDateString("th-TH").replace(/\//g, "-")
       : "unknown";
     const endStr = endDate
-      ? endDate
-          .toLocaleDateString("th-TH", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          })
-          .replace(/\//g, "-")
+      ? endDate.toLocaleDateString("th-TH").replace(/\//g, "-")
       : "unknown";
     XLSX.writeFile(wb, `weather_data(${startStr}_to_${endStr}).xlsx`);
   };
@@ -509,7 +528,6 @@ export default function DataPage() {
                   ? ((row.solar * 3600) / 1e6).toFixed(2)
                   : row.solar.toFixed(2);
 
-              // ✅ เช็คว่าเป็นเวลา 00:00
               const isMidnight = hourStr === "00:00";
 
               return (
@@ -533,9 +551,6 @@ export default function DataPage() {
         </table>
       ) : null}
       {!loading && !data.length && <p>{t_.notFound}</p>}
-      {!loading && !data.length && <p>{t_.notFound}</p>}
-      
     </div>
   );
 }
-

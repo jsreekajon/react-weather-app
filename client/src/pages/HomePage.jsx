@@ -9,7 +9,7 @@ import WeatherMap from "../components/map";
 import provinceEn from "../data/provinceEn";
 import districtEn from "../data/districtEn";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase"; // เพิ่ม db
 import useFetchProfile from "../hooks/useFetchProfile";
 import {
   ResponsiveContainer,
@@ -27,20 +27,7 @@ import {
   logMinuteSummary,
   logHomePageSummary,
 } from "../utils/analytics";
-
-/**
- * HomePage.jsx (clean + fixes)
- *
- * หลัก ๆ ที่แก้:
- * - ย้าย climate state ขึ้นก่อนใช้งาน
- * - แก้ rainfall/dayData และซิงก์ unit conversion ให้ชัดเจน
- * - totalDailyETo เก็บเป็น number (ไม่ใช่ string)
- * - ปรับ mapCenter ให้มี fallback
- * - ใช้ hour.datetimeEpoch เป็น key ในตาราง (unique)
- * - แปลงค่า input เป็น number เมื่อจำเป็น
- * - ปรับ dependencies ของ useEffect ให้เฉพาะค่า .value เท่านั้น
- * - ป้องกันการบันทึกข้อมูลไม่ครบก่อนส่งไป analytics
- */
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"; // เพิ่ม function
 
 /* translations (unchanged) */
 const translations = {
@@ -137,7 +124,6 @@ export default function HomePage() {
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
 
-  // --- STATES (logical grouping & order) ---
   const [province, setProvince] = useState({
     label: defaultProvince,
     value: defaultProvince,
@@ -153,16 +139,13 @@ export default function HomePage() {
 
   const [selectedDay, setSelectedDay] = useState(null);
 
-  // summary inputs / derived
-  const [canopyRadius, setCanopyRadius] = useState(1); // store as number
+  const [canopyRadius, setCanopyRadius] = useState(1); 
   const [plantType, setPlantType] = useState("ทุเรียน");
   const [kc, setKc] = useState(kcOptionsByPlant["ทุเรียน"]?.[0] || null);
 
-  // climate scenario controls (moved up so available to handlers)
   const [climateTempDelta, setClimateTempDelta] = useState(2);
   const [climateHumidityDelta, setClimateHumidityDelta] = useState(-20);
 
-  // small UI states
   const [t, setT] = useState(null);
   const [h, setH] = useState(null);
   const [l, setL] = useState(null);
@@ -170,7 +153,6 @@ export default function HomePage() {
 
   const t_ = translations[lang];
 
-  // --- helpers ---
   const formatDate = (d) => d.toISOString().slice(0, 10);
   const formatDateThai = (isoDate) => {
     const [y, m, d] = isoDate.split("-");
@@ -178,10 +160,9 @@ export default function HomePage() {
   };
   const formatDateEn = (isoDate) => {
     const [y, m, d] = isoDate.split("-");
-    return `${m}-${d}-${y}`; // en -> MM-DD-YYYY for readability
+    return `${m}-${d}-${y}`;
   };
 
-  // translate helpers
   const getProvinceLabel = (prov) =>
     lang === "en" ? provinceEn[prov] || prov : prov;
   const getDistrictLabel = (prov, dist) => {
@@ -194,7 +175,68 @@ export default function HomePage() {
   const getPlantLabel = (plant) =>
     lang === "en" ? plantEn[plant]?.name || plant : plant;
 
-  // --- analytics: log page view once when user+province available (avoid duplicate logs) ---
+  // --- ส่วนที่เพิ่ม: ดึงข้อมูลล่าสุดจาก Firestore ---
+  useEffect(() => {
+    const fetchLastSavedData = async () => {
+      if (user?.email) {
+        try {
+          const q = query(
+            collection(db, "HomePage"),
+            where("userEmail", "==", user.email),
+            orderBy("timestamp", "desc"),
+            limit(1)
+          );
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const saved = querySnapshot.docs[0].data();
+            console.log("Restoring HomePage data:", saved);
+
+            // Restore Province
+            if (saved.province) {
+              setProvince({
+                label: getProvinceLabel(saved.province),
+                value: saved.province,
+              });
+              if (saved.district) {
+                setDistrict({
+                  label: getDistrictLabel(saved.province, saved.district),
+                  value: saved.district,
+                });
+              }
+            }
+
+            if (saved.canopyRadius) setCanopyRadius(Number(saved.canopyRadius));
+            
+            // Restore Plant & Kc
+            if (saved.plantType) {
+              setPlantType(saved.plantType);
+              if (saved.kc) {
+                 // Note: kc saved as value (number), need to find object from options
+                 const options = kcOptionsByPlant[saved.plantType] || [];
+                 const foundKc = options.find(k => k.value === saved.kc);
+                 if(foundKc) setKc(foundKc);
+              }
+            }
+
+            // Restore Climate Deltas
+            if (saved.climateTempDelta !== undefined) setClimateTempDelta(saved.climateTempDelta);
+            if (saved.climateHumidityDelta !== undefined) setClimateHumidityDelta(saved.climateHumidityDelta);
+
+            // Restore Selected Day (Note: This depends on weather data being fetched for that day)
+            if (saved.selectedDate) {
+                setSelectedDay(saved.selectedDate);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching last homepage data:", error);
+        }
+      }
+    };
+    fetchLastSavedData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  // ------------------------------------------------
+
   useEffect(() => {
     if (user && province?.value) {
       logPageView(user, "HomePage", {
@@ -202,22 +244,30 @@ export default function HomePage() {
         district: district.value,
       });
     }
-    // only re-run when user or province.value changes
   }, [user, province?.value, district?.value]);
 
-  // keep kc in sync with plantType
   useEffect(() => {
-    const defaultKc = kcOptionsByPlant[plantType]?.[0] || null;
-    setKc(defaultKc);
-  }, [plantType]);
+    // Only set default if user didn't load a different one (this might conflict with fetch, 
+    // but since we set kc state in the restore effect, we should ensure this effect doesn't overwrite it immediately 
+    // if plantType hasn't changed by user interaction. 
+    // However, typically setting plantType triggers this. We can check if current kc matches plantType options.)
+    const currentOptions = kcOptionsByPlant[plantType] || [];
+    const isCurrentKcValid = currentOptions.some(opt => opt.value === kc?.value);
+    if (!isCurrentKcValid) {
+        const defaultKc = currentOptions[0] || null;
+        setKc(defaultKc);
+    }
+  }, [plantType, kc]);
 
-  // ensure district resets when province changes
   useEffect(() => {
-    const firstDistrict = provinces[province.value]?.[0];
-    if (firstDistrict) setDistrict({ label: firstDistrict, value: firstDistrict });
-  }, [province.value]);
+    // Ensure district resets when province changes *only if* current district doesn't belong to new province
+    const validDistricts = provinces[province.value] || [];
+    if (!validDistricts.includes(district.value)) {
+       const firstDistrict = validDistricts[0];
+       if (firstDistrict) setDistrict({ label: firstDistrict, value: firstDistrict });
+    }
+  }, [province.value, district.value]);
 
-  // --- fetch weather (debounced + cached) ---
   const debounceRef = useRef();
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -242,7 +292,6 @@ export default function HomePage() {
           setLoading(false);
           return;
         } catch (e) {
-          // if cache is corrupt, continue to fetch
           console.warn("Invalid cached weather, refetching", e);
         }
       }
@@ -283,12 +332,16 @@ export default function HomePage() {
     return () => clearTimeout(debounceRef.current);
   }, [province.value, district.value, lang]);
 
-  // set default selectedDay when weather arrives
   useEffect(() => {
-    if (weather?.days?.length > 0) setSelectedDay(weather.days[0].datetime);
-  }, [weather]);
+    if (weather?.days?.length > 0 && !selectedDay) {
+        setSelectedDay(weather.days[0].datetime);
+    } else if (weather?.days?.length > 0 && selectedDay) {
+        // Check if selectedDay is in the fetched days
+        const exists = weather.days.find(d => d.datetime === selectedDay);
+        if (!exists) setSelectedDay(weather.days[0].datetime);
+    }
+  }, [weather, selectedDay]);
 
-  // set t/h/l when selectedDay changes
   useEffect(() => {
     if (!weather || !selectedDay) return;
     const dayData = weather.days.find((day) => day.datetime === selectedDay);
@@ -299,7 +352,6 @@ export default function HomePage() {
     }
   }, [weather, selectedDay]);
 
-  // compute per-day summary ETo (number, mm/day)
   const hourlyData = useMemo(() => {
     if (!weather || !selectedDay) return [];
     const day = weather.days.find((d) => d.datetime === selectedDay);
@@ -310,8 +362,6 @@ export default function HomePage() {
     if (!hourlyData || hourlyData.length === 0) return 0;
     const sum = hourlyData.reduce((sumAcc, hour) => {
       const { temp, humidity, windspeed = 2, solarradiation } = hour;
-      // VisualCrossing solarradiation in W/m2 -> convert to MJ/m2 per hour:
-      // W/m2 * 3600 sec * 1e-6 = MJ/m2/hr
       const solarMJ = solarradiation !== undefined ? (solarradiation * 3600) / 1e6 : null;
       if (temp === undefined || humidity === undefined || solarMJ === null) return sumAcc;
       const eto = calculateHourlyETo({
@@ -323,11 +373,9 @@ export default function HomePage() {
       });
       return isNaN(eto) ? sumAcc : sumAcc + eto;
     }, 0);
-    // return number (rounded to 3 decimals)
     return Number(sum.toFixed(3));
   }, [hourlyData]);
 
-  // ETc (mm/day) using kc.value; ensure kc exists and kc.value is numeric
   const etc = useMemo(() => {
     const kcVal = kc?.value ?? null;
     if (totalDailyETo === null || kcVal === null) return null;
@@ -339,7 +387,6 @@ export default function HomePage() {
     return !isNaN(r) ? Math.PI * r * r : null;
   }, [canopyRadius]);
 
-  // rainfall for selected day (mm) - safe extraction and rounding
   const rainfall = useMemo(() => {
     if (!weather || !selectedDay) return null;
     const dayData = weather.days.find((d) => d.datetime === selectedDay);
@@ -347,23 +394,19 @@ export default function HomePage() {
     return Number(rain.toFixed(2));
   }, [weather, selectedDay]);
 
-  // net water per tree in liters (assuming canopyArea in m2, using mm -> liters/m2)
-  // NOTE: 1 mm over 1 m2 = 1 liter. We used canopyAreaSqM (m2) * netETc(mm)
   const waterNetPerTree = useMemo(() => {
     if (canopyAreaSqM === null || etc === null || rainfall === null) return null;
-    const netETc = etc - rainfall; // mm
-    const netWater = Math.max(0, canopyAreaSqM * netETc); // liters (mm*m2 -> liters)
+    const netETc = etc - rainfall; 
+    const netWater = Math.max(0, canopyAreaSqM * netETc);
     return Number(netWater.toFixed(2));
   }, [canopyAreaSqM, etc, rainfall]);
 
-  // Simple VPD helper (kPa)
   const calcVPD = (tempC, humidityPct) => {
     const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
     const avp = (humidityPct / 100) * svp;
     return Number((svp - avp).toFixed(3));
   };
 
-  // aggregator hook (keeps sending summary for analytics, non-blocking)
   useWeatherAggregator({
     user,
     province,
@@ -378,7 +421,6 @@ export default function HomePage() {
     vpd: calcVPD(t ?? 0, h ?? 0),
   });
 
-  // Climate scenario: recompute net water per tree under scenario deltas
   const climateScenarioWaterNetPerTree = useMemo(() => {
     if (!weather || !selectedDay || canopyAreaSqM === null || rainfall === null) return null;
     const etoSum = hourlyData.reduce((acc, hour) => {
@@ -403,7 +445,6 @@ export default function HomePage() {
     return Number(netWater.toFixed(2));
   }, [weather, selectedDay, canopyAreaSqM, rainfall, climateTempDelta, climateHumidityDelta, kc, hourlyData]);
 
-  // UI options
   const provinceOptions = Object.keys(provinces).map((prov) => ({
     label: getProvinceLabel(prov),
     value: prov,
@@ -425,9 +466,7 @@ export default function HomePage() {
   const coordKey = `${province.value}_${district.value}`;
   const mapCenter = provinceCoordinates[coordKey] || provinceCoordinates[province.value] || [13.7563, 100.5018];
 
-  // --- HANDLERS ---
   const handleSaveSummary = async () => {
-    // Validate required fields before saving
     const missing = [];
     if (!province?.value) missing.push("province");
     if (!district?.value) missing.push("district");
@@ -459,7 +498,6 @@ export default function HomePage() {
         vpd: calcVPD(t ?? 0, h ?? 0),
       });
 
-      // logHomePageSummary expects root-level fields in analytics.js (per your analytics file)
       await logHomePageSummary(user, {
         userId: user.uid,
         userEmail: user.email,
@@ -485,7 +523,6 @@ export default function HomePage() {
     }
   };
 
-  // --- Chart components (kept local) ---
   function ClimateScenarioVPDChart({ weather, selectedDay, tempDelta, humidityDelta, lang = "th" }) {
     const hourlyVPDData = useMemo(() => {
       if (!weather?.days || !selectedDay) return [];
@@ -577,7 +614,6 @@ export default function HomePage() {
     );
   }
 
-  // --- RENDER ---
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
       <GoogleLoginModal />

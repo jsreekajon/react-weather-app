@@ -4,8 +4,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import th from "date-fns/locale/th";
 import useFetchProfile from "../hooks/useFetchProfile";
 import provinces from "../data/provinces";
-import provinceEn from "../data/provinceEn"; // เพิ่ม
-import districtEn from "../data/districtEn"; // เพิ่ม
+import provinceEn from "../data/provinceEn";
+import districtEn from "../data/districtEn";
 import Select from "react-select";
 import { calculateHourlyETo } from "../utils/calculateETo";
 import {
@@ -17,13 +17,13 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
-import { useLanguage } from "../contexts/LanguageContext"; // เพิ่ม
+import { useLanguage } from "../contexts/LanguageContext";
 import provinceCoordinates from "../data/provinceCoordinates";
 import GoogleLoginModal from "../components/GoogleLoginModal";
 import { logPageView, logDashboardPageSummary } from "../utils/analytics";
-import { useAuthState } from "react-firebase-hooks/auth"; 
-import { auth } from "../firebase";
-
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth, db } from "../firebase"; // เพิ่ม db
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"; // เพิ่ม firestore function
 
 registerLocale("th", th);
 
@@ -45,7 +45,7 @@ function getYAxisOptions(currentLang) {
 export default function DashboardPage() {
   useFetchProfile();
   const [user] = useAuthState(auth);
-  const { lang, setLang } = useLanguage(); // ใช้ context
+  const { lang, setLang } = useLanguage();
 
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
@@ -65,6 +65,65 @@ export default function DashboardPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [yAxis, setYAxis] = useState(getYAxisOptions(lang)[0]);
 
+  const getProvinceLabel = (prov) =>
+    lang === "en" ? provinceEn[prov] || prov : prov;
+
+  const getDistrictLabel = (prov, dist) => {
+    if (lang === "en") {
+      const provEn = provinceEn[prov] || prov;
+      return districtEn[provEn]?.[dist] || dist;
+    }
+    return dist;
+  };
+
+  // --- ส่วนที่เพิ่ม: ดึงข้อมูลล่าสุดจาก Firestore ---
+  useEffect(() => {
+    const fetchLastSavedData = async () => {
+      if (user?.email) {
+        try {
+          const q = query(
+            collection(db, "DashboardPage"),
+            where("userEmail", "==", user.email),
+            orderBy("timestamp", "desc"),
+            limit(1)
+          );
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const data = querySnapshot.docs[0].data();
+            console.log("Restoring DashboardPage data:", data);
+
+            if (data.province) {
+              setProvince({
+                label: getProvinceLabel(data.province),
+                value: data.province,
+              });
+              // Restore district if exists
+              if (data.district) {
+                setDistrict({
+                  label: getDistrictLabel(data.province, data.district),
+                  value: data.district,
+                });
+              }
+            }
+            if (data.startDate) setStartDate(new Date(data.startDate));
+            if (data.endDate) setEndDate(new Date(data.endDate));
+            if (data.yAxis) {
+              const options = getYAxisOptions(lang);
+              const found = options.find((opt) => opt.value === data.yAxis);
+              if (found) setYAxis(found);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching last dashboard data:", error);
+        }
+      }
+    };
+
+    fetchLastSavedData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); 
+  // ------------------------------------------------
+
   // Log page view
   useEffect(() => {
     if (user && province?.value) {
@@ -75,7 +134,7 @@ export default function DashboardPage() {
     }
   }, [user, province?.value, district?.value]);
 
-  // อัปเดต label ของ yAxis ตามภาษา แต่คงค่า value เดิม
+  // อัปเดต label ของ yAxis ตามภาษา
   useEffect(() => {
     const options = getYAxisOptions(lang);
     setYAxis(
@@ -83,7 +142,6 @@ export default function DashboardPage() {
     );
   }, [lang]);
 
-  // เพิ่ม translations สำหรับปุ่มภาษา
   const translations = {
     th: {
       langBtn: "EN",
@@ -125,18 +183,6 @@ export default function DashboardPage() {
     return `${year}-${month}-${day}`;
   };
 
-  const getProvinceLabel = (prov) =>
-    lang === "en" ? provinceEn[prov] || prov : prov;
-
-  const getDistrictLabel = (prov, dist) => {
-    if (lang === "en") {
-      const provEn = provinceEn[prov] || prov;
-      return districtEn[provEn]?.[dist] || dist;
-    }
-    return dist;
-  };
-
-  // สร้าง options dropdown
   const provinceOptions = Object.keys(provinces).map((prov) => ({
     label: getProvinceLabel(prov),
     value: prov,
@@ -147,7 +193,6 @@ export default function DashboardPage() {
       value: dist,
     })) || [];
 
-  // Debounce & cache
   const debounceRef = useRef();
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -155,7 +200,7 @@ export default function DashboardPage() {
       setLoading(true);
       setErrorMsg("");
       setWeatherData([]);
-      // Normalize date range to ensure start <= end
+      
       const startD = new Date(startDate);
       const endD = new Date(endDate);
       const startFirst = startD <= endD ? startD : endD;
@@ -167,8 +212,6 @@ export default function DashboardPage() {
       const location = coords ? `${coords[0]},${coords[1]}` : `${province.value},TH`;
 
       console.log("province", province ,"coords", coords, "location", location);
-      // const location = `${district.value},${province.value},TH`;
-
 
       const cacheKey = `weather_${location}_${start}_${end}`;
       const cached = localStorage.getItem(cacheKey);
@@ -209,7 +252,6 @@ export default function DashboardPage() {
             }
             if (!res.ok) throw new Error("โหลดข้อมูลล้มเหลว");
             const json = await res.json();
-            // Flatten all hours from all days, add date field
             const tableData = [];
             (json.days || []).forEach((day) => {
               (day.hours || []).forEach((row) => {
@@ -267,19 +309,16 @@ export default function DashboardPage() {
         setLoading(false);
       };
       fetchData();
-    }, 1000); // debounce 1 วินาที
+    }, 1000); 
     return () => clearTimeout(debounceRef.current);
-    // eslint-disable-next-line
   }, [province, district, startDate, endDate]);
 
-  // กรองข้อมูลเฉพาะช่วงวันที่ที่เลือก
   const filteredHourlyData = useMemo(() => {
     const start = formatDate(startDate);
     const end = formatDate(endDate);
     return weatherData.filter((d) => d.date >= start && d.date <= end);
   }, [weatherData, startDate, endDate]);
 
-  // Compute Y axis domain: ensure max has +1 unit padding (except humidity)
   const yDomain = useMemo(() => {
     if (!filteredHourlyData || !filteredHourlyData.length) return undefined;
     if (yAxis?.value === "humidity") return [0, 100];
@@ -289,16 +328,13 @@ export default function DashboardPage() {
     if (!vals.length) return undefined;
     const max = Math.max(...vals);
     const min = Math.min(...vals);
-    // if flat line, give a small padding below as well
     if (max === min) return [min - 1, max + 1];
     return [min, max + 1];
   }, [filteredHourlyData, yAxis]);
 
-  // Custom Tooltip สำหรับกราฟ
   function CustomTooltip({ active, payload, label }) {
     if (active && payload && payload.length > 0) {
       const data = payload[0].payload;
-      // แปลงวันที่เป็น วัน เดือน ปี
       const [year, month, day] = (data.date || "").split("-");
       const dateText =
         day && month && year ? `${day}-${month}-${year}` : data.date || "";
@@ -321,24 +357,11 @@ export default function DashboardPage() {
     return null;
   }
 
-  // handler for save button: call analytics and show toast
   const handleSaveButton = async () => {
-    console.log("=== handleSaveButton called ===");
-    console.log("user:", user);
-    console.log("user?.uid:", user?.uid);
-    console.log("user?.email:", user?.email);
     if (!user) {
       alert("Please login first");
       return;
     }
-    const payload = {
-      province: province.value,
-      district: district.value,
-      startDate: formatDate(startDate),
-      endDate: formatDate(endDate),
-      yAxis: yAxis.value,
-    };
-    console.log("Payload to save:", payload);
     try {
       await logDashboardPageSummary(user, {
         province: province.value,
@@ -347,11 +370,9 @@ export default function DashboardPage() {
         endDate: formatDate(endDate),
         yAxis: yAxis.value,
       });
-      console.log("✅ logDashboardPageSummary completed successfully");
       alert("✅ Data saved successfully");
     } catch (e) {
       console.error("❌ Error in logDashboardPageSummary:", e);
-      console.error("Error saving dashboard summary:", e);
       alert("❌ Failed to save data");
     }
   };
@@ -359,7 +380,6 @@ export default function DashboardPage() {
   return (
     <div className="container" style={{ maxWidth: 1000, marginTop: 20 }}>
       <GoogleLoginModal />
-      
       <button
         style={{ float: "right", marginTop: 10 }}
         onClick={() => setLang(lang === "th" ? "en" : "th")}
@@ -438,7 +458,6 @@ export default function DashboardPage() {
         <p>{t_.notFound}</p>
       ) : (
         <>
-          {/* กราฟ */}
           <ResponsiveContainer width="100%" height={350}>
             <LineChart
               data={filteredHourlyData}
@@ -476,7 +495,6 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </>
       )}
-      
     </div>
   );
 }
