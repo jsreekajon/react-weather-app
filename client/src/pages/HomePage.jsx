@@ -9,7 +9,7 @@ import WeatherMap from "../components/map";
 import provinceEn from "../data/provinceEn";
 import districtEn from "../data/districtEn";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { auth, db } from "../firebase"; // เพิ่ม db
+import { auth, db } from "../firebase";
 import useFetchProfile from "../hooks/useFetchProfile";
 import {
   ResponsiveContainer,
@@ -27,7 +27,8 @@ import {
   logMinuteSummary,
   logHomePageSummary,
 } from "../utils/analytics";
-import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"; // เพิ่ม function
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import UserDataDisplay from "../components/UserDataDisplay"; // Import ถูกต้องแล้ว
 
 /* translations (unchanged) */
 const translations = {
@@ -117,9 +118,12 @@ function rotateApiKey() {
 }
 
 export default function HomePage() {
-  const [user] = useAuthState(auth);
   useFetchProfile();
+  const [user] = useAuthState(auth);
   const { lang, setLang } = useLanguage();
+
+  // --- State สำหรับสั่งให้ UserDataDisplay โหลดข้อมูลใหม่ ---
+  const [refreshDataKey, setRefreshDataKey] = useState(0); 
 
   const defaultProvince = Object.keys(provinces)[0];
   const defaultDistrict = provinces[defaultProvince][0];
@@ -139,7 +143,7 @@ export default function HomePage() {
 
   const [selectedDay, setSelectedDay] = useState(null);
 
-  const [canopyRadius, setCanopyRadius] = useState(1); 
+  const [canopyRadius, setCanopyRadius] = useState(1);
   const [plantType, setPlantType] = useState("ทุเรียน");
   const [kc, setKc] = useState(kcOptionsByPlant["ทุเรียน"]?.[0] || null);
 
@@ -175,14 +179,16 @@ export default function HomePage() {
   const getPlantLabel = (plant) =>
     lang === "en" ? plantEn[plant]?.name || plant : plant;
 
-  // --- ส่วนที่เพิ่ม: ดึงข้อมูลล่าสุดจาก Firestore ---
+  // --- Restore Data Logic ---
   useEffect(() => {
     const fetchLastSavedData = async () => {
-      if (user?.email) {
+      // แก้ไข: เช็ค user.uid แทน user.email
+      if (user?.uid) {
         try {
+          // --- แก้ไข QUERY ตรงนี้: เปลี่ยน userEmail เป็น userId ---
           const q = query(
             collection(db, "HomePage"),
-            where("userEmail", "==", user.email),
+            where("userId", "==", user.uid), // ใช้ userId เพื่อให้ผ่าน Security Rules
             orderBy("timestamp", "desc"),
             limit(1)
           );
@@ -191,7 +197,6 @@ export default function HomePage() {
             const saved = querySnapshot.docs[0].data();
             console.log("Restoring HomePage data:", saved);
 
-            // Restore Province
             if (saved.province) {
               setProvince({
                 label: getProvinceLabel(saved.province),
@@ -206,25 +211,23 @@ export default function HomePage() {
             }
 
             if (saved.canopyRadius) setCanopyRadius(Number(saved.canopyRadius));
-            
-            // Restore Plant & Kc
+
             if (saved.plantType) {
               setPlantType(saved.plantType);
               if (saved.kc) {
-                 // Note: kc saved as value (number), need to find object from options
-                 const options = kcOptionsByPlant[saved.plantType] || [];
-                 const foundKc = options.find(k => k.value === saved.kc);
-                 if(foundKc) setKc(foundKc);
+                const options = kcOptionsByPlant[saved.plantType] || [];
+                const foundKc = options.find((k) => k.value === saved.kc);
+                if (foundKc) setKc(foundKc);
               }
             }
 
-            // Restore Climate Deltas
-            if (saved.climateTempDelta !== undefined) setClimateTempDelta(saved.climateTempDelta);
-            if (saved.climateHumidityDelta !== undefined) setClimateHumidityDelta(saved.climateHumidityDelta);
+            if (saved.climateTempDelta !== undefined)
+              setClimateTempDelta(saved.climateTempDelta);
+            if (saved.climateHumidityDelta !== undefined)
+              setClimateHumidityDelta(saved.climateHumidityDelta);
 
-            // Restore Selected Day (Note: This depends on weather data being fetched for that day)
             if (saved.selectedDate) {
-                setSelectedDay(saved.selectedDate);
+              setSelectedDay(saved.selectedDate);
             }
           }
         } catch (error) {
@@ -235,7 +238,6 @@ export default function HomePage() {
     fetchLastSavedData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-  // ------------------------------------------------
 
   useEffect(() => {
     if (user && province?.value) {
@@ -247,24 +249,22 @@ export default function HomePage() {
   }, [user, province?.value, district?.value]);
 
   useEffect(() => {
-    // Only set default if user didn't load a different one (this might conflict with fetch, 
-    // but since we set kc state in the restore effect, we should ensure this effect doesn't overwrite it immediately 
-    // if plantType hasn't changed by user interaction. 
-    // However, typically setting plantType triggers this. We can check if current kc matches plantType options.)
     const currentOptions = kcOptionsByPlant[plantType] || [];
-    const isCurrentKcValid = currentOptions.some(opt => opt.value === kc?.value);
+    const isCurrentKcValid = currentOptions.some(
+      (opt) => opt.value === kc?.value
+    );
     if (!isCurrentKcValid) {
-        const defaultKc = currentOptions[0] || null;
-        setKc(defaultKc);
+      const defaultKc = currentOptions[0] || null;
+      setKc(defaultKc);
     }
   }, [plantType, kc]);
 
   useEffect(() => {
-    // Ensure district resets when province changes *only if* current district doesn't belong to new province
     const validDistricts = provinces[province.value] || [];
     if (!validDistricts.includes(district.value)) {
-       const firstDistrict = validDistricts[0];
-       if (firstDistrict) setDistrict({ label: firstDistrict, value: firstDistrict });
+      const firstDistrict = validDistricts[0];
+      if (firstDistrict)
+        setDistrict({ label: firstDistrict, value: firstDistrict });
     }
   }, [province.value, district.value]);
 
@@ -282,7 +282,9 @@ export default function HomePage() {
       const endDate = formatDate(new Date(today.getTime() + 7 * 86400000));
 
       const coords = provinceCoordinates[province.value];
-      const location = coords ? `${coords[0]},${coords[1]}` : `${province.value},TH`;
+      const location = coords
+        ? `${coords[0]},${coords[1]}`
+        : `${province.value},TH`;
 
       const cacheKey = `weather_${location}_${startDate}_${endDate}_${lang}`;
       const cached = localStorage.getItem(cacheKey);
@@ -312,7 +314,9 @@ export default function HomePage() {
               continue;
             }
             if (!response.ok)
-              throw new Error(lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data");
+              throw new Error(
+                lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data"
+              );
             const data = await response.json();
             localStorage.setItem(cacheKey, JSON.stringify(data));
             setWeather(data);
@@ -324,7 +328,13 @@ export default function HomePage() {
             rotateApiKey();
           }
         }
-        setError(lastError ? lastError.message : lang === "th" ? "ไม่สามารถดึงข้อมูลได้" : "Unable to fetch data");
+        setError(
+          lastError
+            ? lastError.message
+            : lang === "th"
+            ? "ไม่สามารถดึงข้อมูลได้"
+            : "Unable to fetch data"
+        );
         setLoading(false);
       };
       fetchWeather();
@@ -334,11 +344,10 @@ export default function HomePage() {
 
   useEffect(() => {
     if (weather?.days?.length > 0 && !selectedDay) {
-        setSelectedDay(weather.days[0].datetime);
+      setSelectedDay(weather.days[0].datetime);
     } else if (weather?.days?.length > 0 && selectedDay) {
-        // Check if selectedDay is in the fetched days
-        const exists = weather.days.find(d => d.datetime === selectedDay);
-        if (!exists) setSelectedDay(weather.days[0].datetime);
+      const exists = weather.days.find((d) => d.datetime === selectedDay);
+      if (!exists) setSelectedDay(weather.days[0].datetime);
     }
   }, [weather, selectedDay]);
 
@@ -362,8 +371,10 @@ export default function HomePage() {
     if (!hourlyData || hourlyData.length === 0) return 0;
     const sum = hourlyData.reduce((sumAcc, hour) => {
       const { temp, humidity, windspeed = 2, solarradiation } = hour;
-      const solarMJ = solarradiation !== undefined ? (solarradiation * 3600) / 1e6 : null;
-      if (temp === undefined || humidity === undefined || solarMJ === null) return sumAcc;
+      const solarMJ =
+        solarradiation !== undefined ? (solarradiation * 3600) / 1e6 : null;
+      if (temp === undefined || humidity === undefined || solarMJ === null)
+        return sumAcc;
       const eto = calculateHourlyETo({
         temp,
         humidity,
@@ -395,8 +406,9 @@ export default function HomePage() {
   }, [weather, selectedDay]);
 
   const waterNetPerTree = useMemo(() => {
-    if (canopyAreaSqM === null || etc === null || rainfall === null) return null;
-    const netETc = etc - rainfall; 
+    if (canopyAreaSqM === null || etc === null || rainfall === null)
+      return null;
+    const netETc = etc - rainfall;
     const netWater = Math.max(0, canopyAreaSqM * netETc);
     return Number(netWater.toFixed(2));
   }, [canopyAreaSqM, etc, rainfall]);
@@ -422,14 +434,31 @@ export default function HomePage() {
   });
 
   const climateScenarioWaterNetPerTree = useMemo(() => {
-    if (!weather || !selectedDay || canopyAreaSqM === null || rainfall === null) return null;
+    if (
+      !weather ||
+      !selectedDay ||
+      canopyAreaSqM === null ||
+      rainfall === null
+    )
+      return null;
     const etoSum = hourlyData.reduce((acc, hour) => {
-      const temp = hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
-      const humidityRaw = hour.humidity !== undefined ? hour.humidity + climateHumidityDelta : undefined;
-      const humidity = humidityRaw !== undefined ? Math.max(0, Math.min(100, humidityRaw)) : undefined;
+      const temp =
+        hour.temp !== undefined ? hour.temp + climateTempDelta : undefined;
+      const humidityRaw =
+        hour.humidity !== undefined
+          ? hour.humidity + climateHumidityDelta
+          : undefined;
+      const humidity =
+        humidityRaw !== undefined
+          ? Math.max(0, Math.min(100, humidityRaw))
+          : undefined;
       const wind = hour.windspeed || 2;
-      const solarMJ = hour.solarradiation !== undefined ? (hour.solarradiation * 3600) / 1e6 : null;
-      if (temp === undefined || humidity === undefined || solarMJ === null) return acc;
+      const solarMJ =
+        hour.solarradiation !== undefined
+          ? (hour.solarradiation * 3600) / 1e6
+          : null;
+      if (temp === undefined || humidity === undefined || solarMJ === null)
+        return acc;
       const etoH = calculateHourlyETo({
         temp,
         humidity,
@@ -443,28 +472,42 @@ export default function HomePage() {
     const netETc = etcScenario - rainfall;
     const netWater = Math.max(0, canopyAreaSqM * netETc);
     return Number(netWater.toFixed(2));
-  }, [weather, selectedDay, canopyAreaSqM, rainfall, climateTempDelta, climateHumidityDelta, kc, hourlyData]);
+  }, [
+    weather,
+    selectedDay,
+    canopyAreaSqM,
+    rainfall,
+    climateTempDelta,
+    climateHumidityDelta,
+    kc,
+    hourlyData,
+  ]);
 
   const provinceOptions = Object.keys(provinces).map((prov) => ({
     label: getProvinceLabel(prov),
     value: prov,
   }));
-  const districtOptions = provinces[province.value]?.map((dist) => ({
-    label: getDistrictLabel(province.value, dist),
-    value: dist,
-  })) || [];
+  const districtOptions =
+    provinces[province.value]?.map((dist) => ({
+      label: getDistrictLabel(province.value, dist),
+      value: dist,
+    })) || [];
   const plantOptions = Object.keys(kcOptionsByPlant).map((key) => ({
     label: getPlantLabel(key),
     value: key,
   }));
 
-  const dayOptions = weather?.days?.map((day) => ({
-    label: lang === "th" ? formatDateThai(day.datetime) : formatDateEn(day.datetime),
-    value: day.datetime,
-  })) || [];
+  const dayOptions =
+    weather?.days?.map((day) => ({
+      label:
+        lang === "th" ? formatDateThai(day.datetime) : formatDateEn(day.datetime),
+      value: day.datetime,
+    })) || [];
 
   const coordKey = `${province.value}_${district.value}`;
-  const mapCenter = provinceCoordinates[coordKey] || provinceCoordinates[province.value] || [13.7563, 100.5018];
+  const mapCenter =
+    provinceCoordinates[coordKey] ||
+    provinceCoordinates[province.value] || [13.7563, 100.5018];
 
   const handleSaveSummary = async () => {
     const missing = [];
@@ -478,7 +521,11 @@ export default function HomePage() {
     if (!user) missing.push("user");
 
     if (missing.length > 0) {
-      alert(lang === "th" ? `⚠️ ข้อมูลไม่ครบ: ${missing.join(", ")}` : `⚠️ Missing fields: ${missing.join(", ")}`);
+      alert(
+        lang === "th"
+          ? `⚠️ ข้อมูลไม่ครบ: ${missing.join(", ")}`
+          : `⚠️ Missing fields: ${missing.join(", ")}`
+      );
       return;
     }
 
@@ -517,37 +564,59 @@ export default function HomePage() {
       });
 
       alert("✅ Data saved successfully");
+      
+      // --- เพิ่มส่วนนี้: กระตุ้นให้ UserDataDisplay โหลดข้อมูลใหม่ ---
+      setRefreshDataKey((prevKey) => prevKey + 1);
+      // --------------------------------------------------------
+
     } catch (e) {
       console.error("Save failed:", e);
       alert("❌ Failed to save data");
     }
   };
 
-  function ClimateScenarioVPDChart({ weather, selectedDay, tempDelta, humidityDelta, lang = "th" }) {
+  function ClimateScenarioVPDChart({
+    weather,
+    selectedDay,
+    tempDelta,
+    humidityDelta,
+    lang = "th",
+  }) {
     const hourlyVPDData = useMemo(() => {
       if (!weather?.days || !selectedDay) return [];
       const dayData = weather.days.find((d) => d.datetime === selectedDay);
       if (!dayData?.hours) return [];
       return dayData.hours
         .map((hour) => {
-          const tempC = hour.temp !== undefined ? hour.temp + tempDelta : undefined;
-          const humidityRaw = hour.humidity !== undefined ? hour.humidity + humidityDelta : undefined;
-          const humidity = humidityRaw !== undefined ? Math.max(0, Math.min(100, humidityRaw)) : undefined;
+          const tempC =
+            hour.temp !== undefined ? hour.temp + tempDelta : undefined;
+          const humidityRaw =
+            hour.humidity !== undefined
+              ? hour.humidity + humidityDelta
+              : undefined;
+          const humidity =
+            humidityRaw !== undefined
+              ? Math.max(0, Math.min(100, humidityRaw))
+              : undefined;
           if (tempC == null || humidity == null) return null;
           const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
           const avp = svp * (humidity / 100);
           const vpd = Number((svp - avp).toFixed(3));
           return {
-            time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
             vpd,
           };
         })
         .filter(Boolean);
     }, [weather, selectedDay, tempDelta, humidityDelta]);
 
-    const chartTitle = lang === "en"
-      ? `Climate Scenario VPD Chart (Hourly on ${selectedDay})`
-      : `กราฟ VPD ของ Climate Scenario (รายชั่วโมงในวันที่ ${selectedDay})`;
+    const chartTitle =
+      lang === "en"
+        ? `Climate Scenario VPD Chart (Hourly on ${selectedDay})`
+        : `กราฟ VPD ของ Climate Scenario (รายชั่วโมงในวันที่ ${selectedDay})`;
     const noDataText = lang === "en" ? "No VPD data" : "ไม่มีข้อมูล VPD";
 
     return (
@@ -557,12 +626,23 @@ export default function HomePage() {
           <p>{noDataText}</p>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={hourlyVPDData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+            <LineChart
+              data={hourlyVPDData}
+              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="time" />
-              <YAxis label={{ value: "kPa", angle: -90, position: "insideLeft" }} />
+              <YAxis
+                label={{ value: "kPa", angle: -90, position: "insideLeft" }}
+              />
               <Tooltip />
-              <Line type="monotone" dataKey="vpd" stroke="red" strokeWidth={2} dot={{ r: 3 }} />
+              <Line
+                type="monotone"
+                dataKey="vpd"
+                stroke="red"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -584,14 +664,20 @@ export default function HomePage() {
           const avp = svp * (humidity / 100);
           const vpd = Number((svp - avp).toFixed(3));
           return {
-            time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            time: new Date(hour.datetimeEpoch * 1000).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
             vpd,
           };
         })
         .filter(Boolean);
     }, [weather, selectedDay]);
 
-    const chartTitle = lang === "en" ? `VPD Chart (Hourly on ${selectedDay})` : `กราฟ VPD (รายชั่วโมงในวันที่ ${selectedDay})`;
+    const chartTitle =
+      lang === "en"
+        ? `VPD Chart (Hourly on ${selectedDay})`
+        : `กราฟ VPD (รายชั่วโมงในวันที่ ${selectedDay})`;
     const noDataText = lang === "en" ? "No VPD data" : "ไม่มีข้อมูล VPD";
 
     return (
@@ -601,12 +687,23 @@ export default function HomePage() {
           <p>{noDataText}</p>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={hourlyVPDData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+            <LineChart
+              data={hourlyVPDData}
+              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="time" />
-              <YAxis label={{ value: "kPa", angle: -90, position: "insideLeft" }} />
+              <YAxis
+                label={{ value: "kPa", angle: -90, position: "insideLeft" }}
+              />
               <Tooltip />
-              <Line type="monotone" dataKey="vpd" stroke="#222" strokeWidth={2} dot={{ r: 3 }} />
+              <Line
+                type="monotone"
+                dataKey="vpd"
+                stroke="#222"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -617,46 +714,92 @@ export default function HomePage() {
   return (
     <div className="container" style={{ maxWidth: 1200, marginTop: 20 }}>
       <GoogleLoginModal />
-      <button style={{ float: "right", marginTop: 10 }} onClick={() => setLang(lang === "th" ? "en" : "th")}>
+      <button
+        style={{ float: "right", marginTop: 10 }}
+        onClick={() => setLang(lang === "th" ? "en" : "th")}
+      >
         {t_.langBtn}
       </button>
       <h2>{t_.weatherForecast}</h2>
 
       <div className="row">
         <div className="col-6">
-          <WeatherMap province={province} district={district} mapCenter={mapCenter} weather={weather} selectedDay={selectedDay} t={t} h={h} l={l} vpd={calcVPD(t ?? 0, h ?? 0)} />
+          <WeatherMap
+            province={province}
+            district={district}
+            mapCenter={mapCenter}
+            weather={weather}
+            selectedDay={selectedDay}
+            t={t}
+            h={h}
+            l={l}
+            vpd={calcVPD(t ?? 0, h ?? 0)}
+          />
 
           <label>{t_.province}</label>
-          <Select options={provinceOptions} value={{ label: getProvinceLabel(province.value), value: province.value }} onChange={setProvince} isSearchable />
+          <Select
+            options={provinceOptions}
+            value={{
+              label: getProvinceLabel(province.value),
+              value: province.value,
+            }}
+            onChange={setProvince}
+            isSearchable
+          />
 
           <label>{t_.district}</label>
-          <Select options={districtOptions} value={{ label: getDistrictLabel(province.value, district.value), value: district.value }} onChange={setDistrict} isSearchable />
+          <Select
+            options={districtOptions}
+            value={{
+              label: getDistrictLabel(province.value, district.value),
+              value: district.value,
+            }}
+            onChange={setDistrict}
+            isSearchable
+          />
 
           <label>{t_.canopyRadius}</label>
           <input
             type="number"
             value={canopyRadius}
-            onChange={(e) => setCanopyRadius(e.target.value === "" ? "" : Number(e.target.value))}
+            onChange={(e) =>
+              setCanopyRadius(e.target.value === "" ? "" : Number(e.target.value))
+            }
             style={{ width: "100%" }}
             min="0"
             step="1"
           />
 
           <label>{t_.selectPlant}</label>
-          <Select options={plantOptions} value={{ label: getPlantLabel(plantType), value: plantType }} onChange={(option) => setPlantType(option.value)} />
+          <Select
+            options={plantOptions}
+            value={{ label: getPlantLabel(plantType), value: plantType }}
+            onChange={(option) => setPlantType(option.value)}
+          />
 
-          <label>{t_.kc(lang === "en" ? plantEn[plantType]?.name || plantType : plantType)}</label>
+          <label>
+            {t_.kc(
+              lang === "en" ? plantEn[plantType]?.name || plantType : plantType
+            )}
+          </label>
           <Select
             options={
               lang === "en" && plantEn[plantType]?.labelEn
-                ? kcOptionsByPlant[plantType].map((opt, idx) => ({ label: plantEn[plantType].labelEn[idx], value: opt.value }))
+                ? kcOptionsByPlant[plantType].map((opt, idx) => ({
+                    label: plantEn[plantType].labelEn[idx],
+                    value: opt.value,
+                  }))
                 : kcOptionsByPlant[plantType]
             }
             value={
               lang === "en" && plantEn[plantType]?.labelEn
                 ? {
                     label:
-                      plantEn[plantType].labelEn[kcOptionsByPlant[plantType].findIndex((k) => k.value === kc?.value)],
+                      plantEn[plantType].labelEn[
+                        kcOptionsByPlant[plantType].findIndex(
+                          (k) => k.value === kc?.value
+                        )
+                      ],
                     value: kc?.value,
                   }
                 : kc
@@ -667,9 +810,16 @@ export default function HomePage() {
           {weather && (
             <>
               <label>{t_.selectDate}</label>
-              <Select options={dayOptions} value={dayOptions.find((opt) => opt.value === selectedDay)} onChange={(option) => setSelectedDay(option.value)} />
+              <Select
+                options={dayOptions}
+                value={dayOptions.find((opt) => opt.value === selectedDay)}
+                onChange={(option) => setSelectedDay(option.value)}
+              />
             </>
           )}
+          
+          {/* เพิ่ม key เพื่อบังคับให้โหลดข้อมูลใหม่เมื่อกดบันทึก */}
+          <UserDataDisplay key={refreshDataKey} />
 
           {loading && <p>{t_.loading}</p>}
           {error && <p style={{ color: "red" }}>{error}</p>}
@@ -682,7 +832,15 @@ export default function HomePage() {
             <p>{t_.noHourly}</p>
           ) : (
             <>
-              <table border="1" cellPadding="5" style={{ borderCollapse: "collapse", width: "100%", textAlign: "center" }}>
+              <table
+                border="1"
+                cellPadding="5"
+                style={{
+                  borderCollapse: "collapse",
+                  width: "100%",
+                  textAlign: "center",
+                }}
+              >
                 <thead>
                   <tr>
                     <th>{t_.time}</th>
@@ -699,62 +857,155 @@ export default function HomePage() {
                     const temp = hour.temp;
                     const humidity = hour.humidity;
                     const wind = hour.windspeed || 2;
-                    const solarMJ = hour.solarradiation !== undefined ? (hour.solarradiation * 3600) / 1e6 : null;
-                    const etoHourly = temp !== undefined && humidity !== undefined && solarMJ !== null
-                      ? calculateHourlyETo({ temp, humidity, windSpeed: wind, solarRadiation: solarMJ, altitude: 100 })
-                      : null;
+                    const solarMJ =
+                      hour.solarradiation !== undefined
+                        ? (hour.solarradiation * 3600) / 1e6
+                        : null;
+                    const etoHourly =
+                      temp !== undefined &&
+                      humidity !== undefined &&
+                      solarMJ !== null
+                        ? calculateHourlyETo({
+                            temp,
+                            humidity,
+                            windSpeed: wind,
+                            solarRadiation: solarMJ,
+                            altitude: 100,
+                          })
+                        : null;
                     const key = hour.datetimeEpoch ?? `${selectedDay}_${idx}`;
                     return (
                       <tr key={key}>
                         <td>
-                          {hour.datetime ? (() => {
-                            const parts = hour.datetime.split(":");
-                            return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
-                          })() : t_.notSpecified}
+                          {hour.datetime
+                            ? (() => {
+                                const parts = hour.datetime.split(":");
+                                return `${parts[0].padStart(
+                                  2,
+                                  "0"
+                                )}:${parts[1].padStart(2, "0")}`;
+                              })()
+                            : t_.notSpecified}
                         </td>
-                        <td>{temp !== undefined ? temp.toFixed(1) : t_.notSpecified}</td>
-                        <td>{humidity !== undefined ? humidity.toFixed(0) : t_.notSpecified}</td>
-                        <td>{solarMJ !== null ? solarMJ.toFixed(2) : t_.notSpecified}</td>
-                        <td>{wind !== undefined ? wind.toFixed(1) : t_.notSpecified}</td>
-                        <td>{temp !== undefined && humidity !== undefined ? calcVPD(temp, humidity) : t_.notSpecified}</td>
-                        <td>{etoHourly !== null ? etoHourly.toFixed(3) : t_.notSpecified}</td>
+                        <td>
+                          {temp !== undefined ? temp.toFixed(1) : t_.notSpecified}
+                        </td>
+                        <td>
+                          {humidity !== undefined
+                            ? humidity.toFixed(0)
+                            : t_.notSpecified}
+                        </td>
+                        <td>
+                          {solarMJ !== null
+                            ? solarMJ.toFixed(2)
+                            : t_.notSpecified}
+                        </td>
+                        <td>
+                          {wind !== undefined ? wind.toFixed(1) : t_.notSpecified}
+                        </td>
+                        <td>
+                          {temp !== undefined && humidity !== undefined
+                            ? calcVPD(temp, humidity)
+                            : t_.notSpecified}
+                        </td>
+                        <td>
+                          {etoHourly !== null
+                            ? etoHourly.toFixed(3)
+                            : t_.notSpecified}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
 
-              <div style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}>
+              <div
+                style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}
+              >
                 {t_.dailyEto}: {totalDailyETo.toFixed(3)} mm
               </div>
 
-              <div style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}>
-                <div>{t_.rainfall}: {rainfall !== null ? `${rainfall.toFixed(2)} mm` : t_.notSpecified}</div>
-                <div>{t_.etc}: {etc !== null ? `${etc.toFixed(3)} mm/day` : t_.notSpecified}</div>
+              <div
+                style={{ marginTop: 10, fontWeight: "bold", fontSize: "1.1em" }}
+              >
+                <div>
+                  {t_.rainfall}:{" "}
+                  {rainfall !== null
+                    ? `${rainfall.toFixed(2)} mm`
+                    : t_.notSpecified}
+                </div>
+                <div>
+                  {t_.etc}:{" "}
+                  {etc !== null ? `${etc.toFixed(3)} mm/day` : t_.notSpecified}
+                </div>
 
                 {etc !== null && rainfall !== null && canopyAreaSqM !== null && (
                   <>
-                    <div style={{ color: "blue", marginTop: 10, fontSize: "1.1em" }}>
-                      {t_.netWater} = ({etc.toFixed(3)} - {rainfall.toFixed(2)}) × {canopyAreaSqM.toFixed(4)} = {waterNetPerTree} {t_.litersPerTree}
+                    <div
+                      style={{ color: "blue", marginTop: 10, fontSize: "1.1em" }}
+                    >
+                      {t_.netWater} = ({etc.toFixed(3)} - {rainfall.toFixed(2)})
+                      × {canopyAreaSqM.toFixed(4)} = {waterNetPerTree}{" "}
+                      {t_.litersPerTree}
                     </div>
 
                     <div style={{ marginTop: 20 }}>
-                      <div style={{ color: "red", fontWeight: "bold", fontSize: "1.1em" }}>
+                      <div
+                        style={{
+                          color: "red",
+                          fontWeight: "bold",
+                          fontSize: "1.1em",
+                        }}
+                      >
                         {t_.climateScenarioLabel}&nbsp;
                         <label>
                           {t_.tempLabel}&nbsp;
-                          <input type="number" value={climateTempDelta} onChange={(e) => setClimateTempDelta(Number(e.target.value))} style={{ width: 60, color: "red", borderColor: "red" }} />&nbsp;{t_.degreeUnit}&nbsp;
+                          <input
+                            type="number"
+                            value={climateTempDelta}
+                            onChange={(e) =>
+                              setClimateTempDelta(Number(e.target.value))
+                            }
+                            style={{
+                              width: 60,
+                              color: "red",
+                              borderColor: "red",
+                            }}
+                          />
+                          &nbsp;{t_.degreeUnit}&nbsp;
                         </label>
                         {lang === "th" ? "กับ" : "and"}&nbsp;
                         <label>
                           {t_.humidityLabel}&nbsp;
-                          <input type="number" value={climateHumidityDelta} onChange={(e) => setClimateHumidityDelta(Number(e.target.value))} style={{ width: 60, color: "red", borderColor: "red" }} />&nbsp;{t_.percentUnit}&nbsp;
+                          <input
+                            type="number"
+                            value={climateHumidityDelta}
+                            onChange={(e) =>
+                              setClimateHumidityDelta(Number(e.target.value))
+                            }
+                            style={{
+                              width: 60,
+                              color: "red",
+                              borderColor: "red",
+                            }}
+                          />
+                          &nbsp;{t_.percentUnit}&nbsp;
                         </label>
-                        {t_.netWaterScenario} {climateScenarioWaterNetPerTree} {t_.litersPerTree}
+                        {t_.netWaterScenario} {climateScenarioWaterNetPerTree}{" "}
+                        {t_.litersPerTree}
                       </div>
                     </div>
 
-                    <button onClick={handleSaveSummary} style={{ marginTop: 15, width: "100%", padding: 8, fontSize: "1.1em", cursor: "pointer" }}>
+                    <button
+                      onClick={handleSaveSummary}
+                      style={{
+                        marginTop: 15,
+                        width: "100%",
+                        padding: 8,
+                        fontSize: "1.1em",
+                        cursor: "pointer",
+                      }}
+                    >
                       {t_.saveData}
                     </button>
                   </>
@@ -762,8 +1013,18 @@ export default function HomePage() {
               </div>
             </>
           )}
-          <VPDDailyChartCustom weather={weather} selectedDay={selectedDay} lang={lang} />
-          <ClimateScenarioVPDChart weather={weather} selectedDay={selectedDay} tempDelta={climateTempDelta} humidityDelta={climateHumidityDelta} lang={lang} />
+          <VPDDailyChartCustom
+            weather={weather}
+            selectedDay={selectedDay}
+            lang={lang}
+          />
+          <ClimateScenarioVPDChart
+            weather={weather}
+            selectedDay={selectedDay}
+            tempDelta={climateTempDelta}
+            humidityDelta={climateHumidityDelta}
+            lang={lang}
+          />
         </div>
       </div>
     </div>
