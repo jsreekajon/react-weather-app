@@ -18,7 +18,5 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app); 
 
-setLogLevel("debug");
-
 // ✅ Export ทุกอย่างในบรรทัดเดียว
 export { app, db, auth };

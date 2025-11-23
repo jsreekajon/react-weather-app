@@ -1,12 +1,12 @@
+const functions = require("firebase-functions");
 const app = require("./app");
 const helmet = require("helmet");
 
 // เพิ่มความปลอดภัย Header
 app.use(helmet());
 
-const PORT = process.env.PORT || 3000;
+// หมายเหตุ: ไม่ต้องกำหนด PORT หรือสั่ง app.listen() เอง
+// เพราะ Firebase Functions จะจัดการ environment ให้โดยอัตโนมัติ
 
-app.listen(PORT, () => {
-  console.log(`✅ Server listening on port ${PORT}`);
-  console.log(`📍 CORS origin: ${process.env.FRONTEND_URL || "https://weather-31ba2.web.app"}`);
-});
+// ส่งออก Express app ผ่าน https.onRequest
+exports.api = functions.https.onRequest(app);

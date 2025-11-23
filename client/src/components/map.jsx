@@ -4,8 +4,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
 const googleMarkerIcon = new L.Icon({
-  iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-  iconSize: [32, 32],
+  iconUrl: "https://googleusercontent.com/maps.google.com/0",  iconSize: [32, 32],
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
 });

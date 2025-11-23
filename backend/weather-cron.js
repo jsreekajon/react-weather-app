@@ -52,8 +52,7 @@ async function fetchAndStoreWeatherAll() {
         }
         const data = await res.json();
         const docId = `${today}_${province}_${district}`;
-        await db.collection('weather').doc(docId).set({ data, province, district, date: today });
-        console.log(`Saved ${docId} (used key: ...${currentKey.slice(-4)})`); // log ดูว่าใช้ key ไหน
+        await db.collection('weather_results').doc(docId).set({ data, province, district, date: today });        console.log(`Saved ${docId} (used key: ...${currentKey.slice(-4)})`); // log ดูว่าใช้ key ไหน
       } catch (e) {
         console.error('Fetch failed', province, district, e.message);
       }
