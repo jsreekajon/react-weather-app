@@ -1,3 +1,4 @@
+// functions/app.js
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
@@ -9,7 +10,6 @@ const axios = require("axios");
 // --- 1. SETUP FIREBASE ---
 let serviceAccount;
 try {
-  // ถ้ามี ENV ให้ใช้จาก ENV (สำหรับ Local/Production)
   if (process.env.FIREBASE_CREDENTIALS) {
     serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
   }
@@ -17,7 +17,6 @@ try {
   console.warn("FIREBASE_CREDENTIALS invalid/missing, using default credentials.");
 }
 
-// เริ่มต้น Firebase (ถ้าไม่มี serviceAccount จะใช้ Default ของ Server)
 if (serviceAccount) {
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 } else {
@@ -27,35 +26,31 @@ if (serviceAccount) {
 const db = admin.firestore();
 const app = express();
 
-// ตัวอย่างการใช้กับ CORS - ดึง Frontend URL จาก Environment Variable
 const frontendUrl = process.env.FRONTEND_URL || "https://weather-31ba2.web.app";
 
 app.use(cors({ origin: frontendUrl }));
 app.use(express.json());
 
-// --- แก้ไขส่วน CSP ให้ปลอดภัยยิ่งขึ้น ---
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
     [
-      "default-src 'self'", // อนุญาตเฉพาะโดเมนตัวเองเป็นค่าเริ่มต้น
-      "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com", // อนุญาต Script จาก Google/Firebase
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // อนุญาต CSS inline และ Google Fonts
-      "font-src 'self' https://fonts.gstatic.com", // อนุญาต Font
-      "img-src 'self' data: blob: https://weather.visualcrossing.com https://*.googleusercontent.com", // อนุญาตรูปภาพจาก Weather API และ Google Profile
-      "connect-src 'self' https://weather.visualcrossing.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com wss://broker.emqx.io", // อนุญาตการเชื่อมต่อ API และ WebSocket (MQTT)
-      "object-src 'none'", // ป้องกันการฝัง Plugin อันตราย (Flash, Java)
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: blob: https://weather.visualcrossing.com https://*.googleusercontent.com",
+      "connect-src 'self' https://weather.visualcrossing.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com wss://broker.emqx.io wss://*.hivemq.cloud", // เพิ่ม domain MQTT ที่ปลอดภัย (ตัวอย่าง)
+      "object-src 'none'",
       "base-uri 'self'",
-      "frame-ancestors 'none'" // ป้องกันการถูกนำเว็บไปฝังใน iFrame (Clickjacking)
+      "frame-ancestors 'none'"
     ].join("; ")
   );
   next();
 });
 
 // --- 2. API KEY MANAGEMENT ---
-// ดึง Key จาก Environment Variable ตามที่คุณเขียนมา
 const rawKeys = process.env.WEATHER_API_KEYS || "";
-// ถ้าไม่มี ENV ให้ใช้ค่า Default ว่างๆ หรือ Hardcode fallback ไว้เทสต์ (ไม่แนะนำสำหรับ prod)
 const API_KEYS = rawKeys.split(",").map(key => key.trim()).filter(key => key !== "");
 
 if (API_KEYS.length === 0) {
@@ -72,7 +67,6 @@ function rotateApiKey() {
 }
 
 // --- 3. UTILS (การคำนวณค่าทางวิทยาศาสตร์) ---
-// ต้องมีฟังก์ชันนี้ เพื่อแปลงข้อมูลดิบให้เป็นค่าที่ Frontend ต้องการ
 function calculateHourlyETo({ temp, humidity, windSpeed, solarRadiation, altitude }) {
   if (
     temp == null || humidity == null || windSpeed == null ||
@@ -106,7 +100,7 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
-    req.user = decodedToken; // เก็บข้อมูล User ไว้ใช้ต่อ
+    req.user = decodedToken;
     next();
   } catch (error) {
     return res.status(403).send('Unauthorized: Invalid token');
@@ -115,14 +109,16 @@ const verifyToken = async (req, res, next) => {
 
 // --- 5. ROUTES ---
 
-// ใช้ชื่อ route ให้ตรงกับ frontend: /api/weather-hourly
-// ใส่ verifyToken เพื่อป้องกันคนอื่นแอบใช้
 app.get("/api/weather-hourly", verifyToken, async (req, res) => {
-  const { location, start, end } = req.query;
+  // [ปรับปรุง] รับค่า altitude จาก query parameter
+  const { location, start, end, altitude } = req.query;
 
   if (!location || !start || !end) {
     return res.status(400).json({ error: "Missing required query parameters" });
   }
+
+  // กำหนดค่า Default altitude เป็น 100 ถ้า Client ไม่ส่งมา
+  const altValue = altitude ? parseFloat(altitude) : 100;
 
   if (API_KEYS.length === 0) {
     return res.status(500).json({ error: "Server configuration error: No API keys." });
@@ -133,7 +129,6 @@ app.get("/api/weather-hourly", verifyToken, async (req, res) => {
 
   while (tries < maxTries) {
     const apiKey = getApiKey();
-    // ใช้ axios แทน fetch เพื่อความเสถียรใน Node.js environment เก่าๆ
     const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(
       location
     )}/${start}/${end}?unitGroup=metric&include=days%2Chours&key=${apiKey}&contentType=json`;
@@ -142,7 +137,6 @@ app.get("/api/weather-hourly", verifyToken, async (req, res) => {
       const response = await axios.get(url);
       const json = response.data;
 
-      // *** จุดสำคัญ: แปลงข้อมูลและคำนวณ ETo ก่อนส่งกลับ ***
       const tableData = [];
       (json.days || []).forEach((day) => {
         (day.hours || []).forEach((row) => {
@@ -160,7 +154,7 @@ app.get("/api/weather-hourly", verifyToken, async (req, res) => {
                   humidity: row.humidity,
                   windSpeed: row.windspeed ?? 2,
                   solarRadiation: solarMJ,
-                  altitude: 100, 
+                  altitude: altValue, // [ปรับปรุง] ใช้ค่า Dynamic Altitude
                 })
               : null;
 
@@ -188,17 +182,14 @@ app.get("/api/weather-hourly", verifyToken, async (req, res) => {
         });
       });
 
-      // ส่งข้อมูลที่แปรรูปแล้วกลับไป
       return res.json(tableData);
 
     } catch (err) {
       console.error(`Error with key index ${apiKeyIndex}:`, err.message);
-      // ถ้า error เป็น 429 (Too Many Requests) ให้ลอง key ถัดไป
       if (err.response && err.response.status === 429) {
         rotateApiKey();
         tries++;
       } else {
-        // Error อื่นๆ เช่น 400 Bad Request ให้หยุดเลย
         return res.status(500).json({ error: "Failed to fetch external weather data" });
       }
     }
@@ -207,7 +198,6 @@ app.get("/api/weather-hourly", verifyToken, async (req, res) => {
   return res.status(503).json({ error: "Service unavailable: All API keys exhausted" });
 });
 
-// Serve Frontend (Code เดิมของคุณโอเคแล้ว)
 const buildPath = path.join(__dirname, "../client/build");
 if (fs.existsSync(buildPath)) {
   app.use(express.static(buildPath));
@@ -216,18 +206,37 @@ if (fs.existsSync(buildPath)) {
   });
 }
 
-// MQTT Integration (Code เดิมของคุณโอเคแล้ว)
-const mqttClient = mqtt.connect("mqtts://broker.emqx.io:1883");
+// --- [ด่วน] MQTT Integration (Secure) ---
+// ดึงค่า Config จาก Environment Variable
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtts://broker.emqx.io:8883"; // ควรเปลี่ยน URL เป็น Private
+const MQTT_OPTIONS = {
+  username: process.env.MQTT_USERNAME, // รับ Username
+  password: process.env.MQTT_PASSWORD, // รับ Password
+  rejectUnauthorized: false // กรณีใช้ Self-signed cert (ถ้าใช้ Cloud Provider ปรับเป็น true หรือลบออก)
+};
+
+const mqttClient = mqtt.connect(MQTT_BROKER_URL, MQTT_OPTIONS);
+
 mqttClient.on("connect", () => {
-  mqttClient.subscribe(["weather/data", "weather/processed"], (err) => {
-    if (!err) console.log("✅ Subscribed to MQTT topics");
+  console.log("✅ Connected to MQTT Broker");
+  // Subscribe topic ที่ซับซ้อนขึ้น หรือใช้ค่าจาก ENV
+  const topicData = process.env.MQTT_TOPIC_DATA || "weather/data";
+  const topicProcessed = process.env.MQTT_TOPIC_PROCESSED || "weather/processed";
+  
+  mqttClient.subscribe([topicData, topicProcessed], (err) => {
+    if (!err) console.log(`✅ Subscribed to ${topicData}, ${topicProcessed}`);
   });
+});
+
+mqttClient.on("error", (err) => {
+  console.error("❌ MQTT Connection Error:", err.message);
 });
 
 mqttClient.on("message", async (topic, message) => {
   try {
     const payload = JSON.parse(message.toString());
-    if (topic === "weather/processed") {
+    // ตรวจสอบ topic จาก env ด้วย
+    if (topic === (process.env.MQTT_TOPIC_PROCESSED || "weather/processed")) {
       await db.collection("weather_results").add({
         ...payload,
         timestamp: admin.firestore.Timestamp.now(),

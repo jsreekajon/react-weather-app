@@ -18,7 +18,6 @@ if (API_KEYS.length === 0) {
 // ตัวแปรนับจำนวนเพื่อใช้ในการวนใช้ Key (Round Robin)
 let requestCount = 0;
 
-// ฟังก์ชันช่วยเลือก Key: จะวนไปเรื่อยๆ key1 -> key2 -> ... -> key1
 function getNextApiKey() {
   const key = API_KEYS[requestCount % API_KEYS.length];
   requestCount++;
@@ -32,18 +31,18 @@ async function fetchAndStoreWeatherAll() {
     for (const district of provinces[province]) {
       const location = `${district},${province},TH`;
       
-      // 2. เรียกใช้ฟังก์ชัน getNextApiKey() เพื่อเอา Key มาใช้ทีละตัว
       const currentKey = getNextApiKey();
       
       const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/${today}/${today}?unitGroup=metric&include=days%2Chours&key=${currentKey}&contentType=json`;
 
       try {
-        const res = await fetch(url);
+        // [ปรับปรุง] เพิ่ม Timeout 30 วินาที (30000 ms)
+        // node-fetch รองรับ option timeout โดยตรง
+        const res = await fetch(url, { timeout: 30000 });
         
-        // เพิ่มการเช็คกรณี Quota เต็ม (Error 429)
         if (res.status === 429) {
              console.error(`Key ${currentKey} quota exceeded!`);
-             // ในระบบจริงอาจจะเขียน logic ให้ลอง key ถัดไปทันทีตรงนี้ได้
+             // Logic ลอง key ถัดไปอาจจะเพิ่มตรงนี้ได้
         }
 
         if (!res.ok) {
@@ -52,10 +51,25 @@ async function fetchAndStoreWeatherAll() {
         }
         const data = await res.json();
         const docId = `${today}_${province}_${district}`;
-        await db.collection('weather_results').doc(docId).set({ data, province, district, date: today });        console.log(`Saved ${docId} (used key: ...${currentKey.slice(-4)})`); // log ดูว่าใช้ key ไหน
+        await db.collection('weather_results').doc(docId).set({ data, province, district, date: today });
+        console.log(`Saved ${docId} (used key: ...${currentKey.slice(-4)})`); 
       } catch (e) {
-        console.error('Fetch failed', province, district, e.message);
+        // Error timeout จะเข้ามาใน catch นี้ (type: 'request-timeout')
+        if (e.type === 'request-timeout') {
+            console.error(`❌ Timeout fetching ${location}`);
+        } else {
+            console.error('Fetch failed', province, district, e.message);
+        }
       }
     }
   }
 }
+
+// เรียกใช้งานฟังก์ชัน (ถ้าไฟล์นี้ถูกรันโดยตรง)
+fetchAndStoreWeatherAll().then(() => {
+    console.log("Done.");
+    process.exit(0);
+}).catch(err => {
+    console.error("Critical Error:", err);
+    process.exit(1);
+});
